@@ -570,7 +570,20 @@ button{cursor:pointer;font-family:inherit}
 <div id="finger-cursor" style="display:none"></div>
 
 <!-- ═══════════════ JAVASCRIPT ═══════════════ -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/": "https://cdn.jsdelivr.net/npm/three@0.170.0/"
+  }
+}
+</script>
 <script type="module">
+
+import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 // ═══════════════ GPU TIER DETECTION ═══════════════
 function detectTier() {
@@ -647,8 +660,181 @@ document.querySelectorAll('a[href^="#"]').forEach(a => {
   });
 });
 
-// ═══════════════ THREE.JS (Task 2) ═══════════════
-// TODO: Galaxy particle system, bloom, agent orbs, mouse attraction
+// ═══════════════ THREE.JS SCENE + PARTICLE VORTEX ═══════════════
+if (TIER !== 'mobile') {
+
+  // Enable pointer events on canvas for mouse interaction (Task 3)
+  document.getElementById('galaxy-canvas').style.pointerEvents = 'auto';
+
+  // ── Scene, Camera, Renderer ──
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.z = 5;
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas: document.getElementById('galaxy-canvas'),
+    antialias: false,
+    alpha: true
+  });
+  renderer.setClearColor(0x06080F, 1);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  // ── Post-processing (bloom) ──
+  let composer = null;
+  if (CONFIG.bloom) {
+    composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.8,   // strength
+      0.4,   // radius
+      0.85   // threshold
+    );
+    composer.addPass(bloomPass);
+  }
+
+  // ── Resize handler ──
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (composer) composer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ── Particle vortex geometry ──
+  const COUNT = CONFIG.particles;
+  const positions = new Float32Array(COUNT * 3);
+  const colors = new Float32Array(COUNT * 3);
+  const sizes = new Float32Array(COUNT);
+  const baseAngles = new Float32Array(COUNT);
+  const radii = new Float32Array(COUNT);
+  const speeds = new Float32Array(COUNT);
+  const zOffsets = new Float32Array(COUNT);
+
+  const goldColor = new THREE.Color(0xC9973E);
+  const tealColor = new THREE.Color(0x3EDBC6);
+  const whiteColor = new THREE.Color(0xF5F0E6);
+  const tmpColor = new THREE.Color();
+
+  for (let i = 0; i < COUNT; i++) {
+    const arm = Math.floor(Math.random() * 4);
+    const armAngle = (arm / 4) * Math.PI * 2;
+    const t = Math.random();
+    const r = 0.1 + Math.pow(t, 0.6) * 4.5;
+    const spiralAngle = armAngle + t * Math.PI * 3 + (Math.random() - 0.5) * 0.8;
+    const spread = (1 - t * 0.5) * 0.3;
+
+    const x = Math.cos(spiralAngle) * r + (Math.random() - 0.5) * spread;
+    const y = Math.sin(spiralAngle) * r + (Math.random() - 0.5) * spread;
+    const z = (Math.random() - 0.5) * 0.4 * (1 + r * 0.1);
+
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+
+    // Color gradient: gold center → teal mid → white edges
+    if (t < 0.5) {
+      tmpColor.copy(goldColor).lerp(tealColor, t * 2);
+    } else {
+      tmpColor.copy(tealColor).lerp(whiteColor, (t - 0.5) * 2);
+    }
+    colors[i * 3] = tmpColor.r;
+    colors[i * 3 + 1] = tmpColor.g;
+    colors[i * 3 + 2] = tmpColor.b;
+
+    // Sizes: larger at center, smaller at edges
+    sizes[i] = Math.max(0.5, (1 - t) * 3.0 + Math.random() * 0.5);
+
+    // Orbital data
+    baseAngles[i] = spiralAngle;
+    radii[i] = r;
+    speeds[i] = 0.02 / (0.5 + r);
+    zOffsets[i] = z;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+  const posAttr = geometry.getAttribute('position');
+
+  // ── Custom shader material ──
+  const particleMaterial = new THREE.ShaderMaterial({
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: {},
+    vertexShader: `
+      attribute float size;
+      varying vec3 vColor;
+      void main() {
+        vColor = color;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = size * (200.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vColor;
+      void main() {
+        float d = length(gl_PointCoord - vec2(0.5));
+        if (d > 0.5) discard;
+        float alpha = 1.0 - smoothstep(0.0, 0.5, d);
+        gl_FragColor = vec4(vColor, alpha * 0.8);
+      }
+    `
+  });
+
+  const particles = new THREE.Points(geometry, particleMaterial);
+  scene.add(particles);
+
+  // ── Central core ──
+  const coreMaterial = new THREE.MeshBasicMaterial({
+    color: 0xE8B94A,
+    transparent: true,
+    opacity: 0.85
+  });
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.08, 16, 16),
+    coreMaterial
+  );
+  scene.add(core);
+
+  // ── Animation loop ──
+  const clock = new THREE.Clock();
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const elapsed = clock.getElapsedTime();
+
+    // Update particle positions (orbital animation)
+    for (let i = 0; i < COUNT; i++) {
+      const r = radii[i];
+      const angle = baseAngles[i] + elapsed * speeds[i];
+      posAttr.array[i * 3] = Math.cos(angle) * r;
+      posAttr.array[i * 3 + 1] = Math.sin(angle) * r;
+      posAttr.array[i * 3 + 2] = zOffsets[i] + Math.sin(elapsed * 0.5 + r) * 0.02;
+    }
+    posAttr.needsUpdate = true;
+
+    // ══════════ MOUSE / AUDIO / HANDS — added by later tasks ══════════
+
+    // Subtle camera breathing
+    camera.position.z = 5 + Math.sin(elapsed * 0.3) * 0.1;
+
+    // Render
+    if (composer) {
+      composer.render();
+    } else {
+      renderer.render(scene, camera);
+    }
+  }
+
+  animate();
+
+} // end if (TIER !== 'mobile')
 
 // ═══════════════ WEB AUDIO (Task 3) ═══════════════
 // TODO: Mic input, speech-to-text, audio visualizer
