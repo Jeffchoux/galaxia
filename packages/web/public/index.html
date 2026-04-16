@@ -214,6 +214,12 @@ button{cursor:pointer;font-family:inherit}
   transition:all .3s;cursor:pointer;
 }
 .camera-btn:hover{border-color:var(--teal);box-shadow:0 0 20px rgba(62,219,198,.15)}
+.camera-btn.active{border-color:var(--teal);box-shadow:0 0 15px rgba(62,219,198,.2)}
+.camera-btn.denied{opacity:.3;cursor:not-allowed}
+
+.heartbeat-mic.active{border-color:var(--gold);animation:heartbeat-fast .8s ease-in-out infinite}
+.heartbeat-mic.denied{opacity:.3;cursor:not-allowed}
+@keyframes heartbeat-fast{0%,100%{transform:scale(1)}15%{transform:scale(1.12)}30%{transform:scale(1)}45%{transform:scale(1.08)}}
 
 /* ═══════════════ AGENT LABELS ═══════════════ */
 .agent-label{
@@ -802,6 +808,70 @@ if (TIER !== 'mobile') {
   );
   scene.add(core);
 
+  // ══════════ MOUSE INTERACTION ══════════
+  const mouse = new THREE.Vector2(9999, 9999);
+  const mouseWorld = new THREE.Vector3();
+  const raycaster = new THREE.Raycaster();
+  const intersectPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+
+  document.getElementById('galaxy-canvas').addEventListener('mousemove', (e) => {
+    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    raycaster.ray.intersectPlane(intersectPlane, mouseWorld);
+  }, { passive: true });
+
+  document.getElementById('galaxy-canvas').addEventListener('mouseleave', () => {
+    mouse.set(9999, 9999);
+    mouseWorld.set(9999, 9999, 0);
+  });
+
+  // ══════════ AGENT STARS ══════════
+  const AGENTS = [
+    { name: 'Dev', role: 'Engineer', desc: 'Writes code, implements features, fixes bugs autonomously.', r: 0.6, angle: 0, color: 0xE8B94A, size: 0.06 },
+    { name: 'CI/CD', role: 'DevOps', desc: 'Tests, builds, deploys. Rolls back on failure.', r: 1.8, angle: 0.5, color: 0xC9973E, size: 0.04 },
+    { name: 'Test', role: 'QA', desc: 'Writes and runs tests. Catches bugs before prod.', r: 2.2, angle: 1.2, color: 0xC9973E, size: 0.04 },
+    { name: 'Review', role: 'Code Review', desc: 'Reviews every change for quality and best practices.', r: 2.5, angle: 2.0, color: 0xC9973E, size: 0.04 },
+    { name: 'Analyse', role: 'Data', desc: 'Tracks performance, finds N+1 queries, profiles resources.', r: 1.5, angle: 3.5, color: 0x3EDBC6, size: 0.04 },
+    { name: 'Controle', role: 'Security', desc: 'SSL audit, firewall, dependency vulnerabilities.', r: 2.0, angle: 4.2, color: 0x3EDBC6, size: 0.04 },
+    { name: 'Maintenance', role: 'SRE', desc: 'Updates deps, optimizes perf, keeps everything running.', r: 2.8, angle: 4.8, color: 0x3EDBC6, size: 0.035 },
+    { name: 'Veille', role: 'Research', desc: 'Tracks AI trends, emerging tools, GitHub stars.', r: 2.0, angle: -1.5, color: 0xF5F0E6, size: 0.04 },
+    { name: 'Ideas', role: 'Product', desc: 'Generates features based on usage and market trends.', r: 1.3, angle: -2.2, color: 0xF5F0E6, size: 0.04 },
+    { name: 'Contenu', role: 'Content', desc: 'UX copy, SEO content, onboarding flows that convert.', r: 1.7, angle: -0.8, color: 0xF5F0E6, size: 0.04 },
+  ];
+
+  const agentMeshes = [];
+  const agentGroup = new THREE.Group();
+
+  AGENTS.forEach((agent, idx) => {
+    const geo = new THREE.SphereGeometry(agent.size, 12, 12);
+    const mat = new THREE.MeshBasicMaterial({ color: agent.color, transparent: true, opacity: 0.95 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(Math.cos(agent.angle) * agent.r, Math.sin(agent.angle) * agent.r, 0);
+    mesh.userData = { agent, index: idx };
+    agentGroup.add(mesh);
+    agentMeshes.push(mesh);
+
+    // Glow ring
+    const glowGeo = new THREE.RingGeometry(agent.size * 1.5, agent.size * 2.5, 24);
+    const glowMat = new THREE.MeshBasicMaterial({ color: agent.color, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.copy(mesh.position);
+    agentGroup.add(glow);
+    mesh.userData.glow = glow;
+  });
+  scene.add(agentGroup);
+
+  // HTML labels
+  const labelsContainer = document.getElementById('agent-labels');
+  const labelElements = AGENTS.map(agent => {
+    const el = document.createElement('div');
+    el.className = 'agent-label';
+    el.innerHTML = `<h4>${agent.name}</h4><div class="role">${agent.role}</div><p>${agent.desc}</p>`;
+    labelsContainer.appendChild(el);
+    return el;
+  });
+
   // ── Animation loop ──
   const clock = new THREE.Clock();
 
@@ -809,17 +879,134 @@ if (TIER !== 'mobile') {
     requestAnimationFrame(animate);
     const elapsed = clock.getElapsedTime();
 
-    // Update particle positions (orbital animation)
+    // Update particle positions (orbital animation + mouse attraction)
     for (let i = 0; i < COUNT; i++) {
       const r = radii[i];
       const angle = baseAngles[i] + elapsed * speeds[i];
-      posAttr.array[i * 3] = Math.cos(angle) * r;
-      posAttr.array[i * 3 + 1] = Math.sin(angle) * r;
-      posAttr.array[i * 3 + 2] = zOffsets[i] + Math.sin(elapsed * 0.5 + r) * 0.02;
+      let tx = Math.cos(angle) * r;
+      let ty = Math.sin(angle) * r;
+      let tz = zOffsets[i] + Math.sin(elapsed * 0.5 + r) * 0.02;
+
+      // Mouse attraction (full tier only)
+      if (CONFIG.attraction && mouseWorld.x < 100) {
+        const dx = mouseWorld.x - tx;
+        const dy = mouseWorld.y - ty;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 1.5 && dist > 0.01) {
+          const force = Math.min(0.15 / (dist * dist + 0.1), 0.4);
+          tx += dx * force;
+          ty += dy * force;
+          tz += (Math.random() - 0.5) * force * 0.2;
+        }
+      }
+
+      // Smooth lerp for trailing effect
+      posAttr.array[i * 3] += (tx - posAttr.array[i * 3]) * 0.08;
+      posAttr.array[i * 3 + 1] += (ty - posAttr.array[i * 3 + 1]) * 0.08;
+      posAttr.array[i * 3 + 2] += (tz - posAttr.array[i * 3 + 2]) * 0.08;
     }
     posAttr.needsUpdate = true;
 
-    // ══════════ MOUSE / AUDIO / HANDS — added by later tasks ══════════
+    // ══════════ AGENT STARS: orbit + label projection + hover ══════════
+    const tempV = new THREE.Vector3();
+    agentMeshes.forEach((mesh, idx) => {
+      const agent = AGENTS[idx];
+      const orbitAngle = agent.angle + elapsed * 0.05;
+      mesh.position.set(Math.cos(orbitAngle) * agent.r, Math.sin(orbitAngle) * agent.r, 0);
+      mesh.userData.glow.position.copy(mesh.position);
+      mesh.userData.glow.material.opacity = 0.1 + Math.sin(elapsed * 2 + idx) * 0.05;
+
+      // Project to screen
+      tempV.copy(mesh.position).project(camera);
+      const sx = (tempV.x * 0.5 + 0.5) * window.innerWidth;
+      const sy = (-tempV.y * 0.5 + 0.5) * window.innerHeight;
+      labelElements[idx].style.left = sx + 'px';
+      labelElements[idx].style.top = (sy - 20) + 'px';
+    });
+
+    // Hover detection
+    if (mouse.x < 100) {
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(agentMeshes);
+      agentMeshes.forEach((m, i) => labelElements[i].classList.remove('visible'));
+      if (hits.length > 0) {
+        const idx = hits[0].object.userData.index;
+        labelElements[idx].classList.add('visible');
+        document.body.style.cursor = 'pointer';
+      } else {
+        document.body.style.cursor = 'default';
+      }
+    }
+
+    // ══════════ VOICE → PARTICLE VIBRATION ══════════
+    let audioEnergy = 0, bassEnergy = 0, trebleEnergy = 0;
+    if (micActive && analyser) {
+      analyser.getByteFrequencyData(freqData);
+      const bins = freqData.length;
+      for (let b = 0; b < bins / 4; b++) bassEnergy += freqData[b];
+      bassEnergy = bassEnergy / (bins / 4) / 255;
+      for (let b = bins * 3 / 4; b < bins; b++) trebleEnergy += freqData[b];
+      trebleEnergy = trebleEnergy / (bins / 4) / 255;
+      for (let b = 0; b < bins; b++) audioEnergy += freqData[b];
+      audioEnergy = audioEnergy / bins / 255;
+
+      for (let i = 0; i < COUNT; i++) {
+        const r = radii[i];
+        const bassWave = Math.sin(elapsed * 2 + r * 1.5) * bassEnergy * 0.3;
+        const trebleRipple = Math.sin(elapsed * 8 + i * 0.01) * trebleEnergy * 0.08;
+        posAttr.array[i * 3] += bassWave * Math.cos(baseAngles[i]);
+        posAttr.array[i * 3 + 1] += bassWave * Math.sin(baseAngles[i]);
+        posAttr.array[i * 3 + 2] += trebleRipple;
+      }
+      micBtn.style.boxShadow = `0 0 ${20 + audioEnergy * 40}px rgba(201,151,62,${0.2 + audioEnergy * 0.5})`;
+    }
+
+    // Waveform drawing
+    if (micActive && analyser) {
+      const waveCanvas = document.getElementById('mic-wave');
+      const wCtx = waveCanvas.getContext('2d');
+      wCtx.clearRect(0, 0, 60, 20);
+      wCtx.strokeStyle = 'rgba(201,151,62,0.6)';
+      wCtx.lineWidth = 1;
+      wCtx.beginPath();
+      const timeData = new Uint8Array(analyser.fftSize);
+      analyser.getByteTimeDomainData(timeData);
+      const sliceW = 60 / timeData.length;
+      for (let j = 0; j < timeData.length; j++) {
+        const v = timeData[j] / 128.0;
+        const y2 = (v * 20) / 2;
+        if (j === 0) wCtx.moveTo(0, y2); else wCtx.lineTo(j * sliceW, y2);
+      }
+      wCtx.stroke();
+    }
+
+    // ══════════ HAND GESTURE → GALAXY CONTROL ══════════
+    if (cameraActive && handLandmarks) {
+      const gesture = detectGesture(handLandmarks);
+      if (gesture.type === 'palm') {
+        const rx = (gesture.x - 0.5) * 2;
+        const ry = (gesture.y - 0.5) * 2;
+        particles.rotation.y += rx * 0.01;
+        particles.rotation.x += ry * 0.01;
+        agentGroup.rotation.y = particles.rotation.y;
+        agentGroup.rotation.x = particles.rotation.x;
+      }
+      if (gesture.type === 'pinch') {
+        const targetZ = 3 + gesture.distance * 40;
+        camera.position.z += (targetZ - camera.position.z) * 0.05;
+      }
+      if (gesture.type === 'point') {
+        mouse.x = -(gesture.x * 2 - 1);
+        mouse.y = -(gesture.y * 2 - 1);
+        raycaster.setFromCamera(mouse, camera);
+        raycaster.ray.intersectPlane(intersectPlane, mouseWorld);
+        fingerCursor.style.left = ((1 - gesture.x) * window.innerWidth) + 'px';
+        fingerCursor.style.top = (gesture.y * window.innerHeight) + 'px';
+        fingerCursor.style.opacity = '1';
+      } else {
+        fingerCursor.style.opacity = '0';
+      }
+    }
 
     // Subtle camera breathing
     camera.position.z = 5 + Math.sin(elapsed * 0.3) * 0.1;
@@ -836,11 +1023,114 @@ if (TIER !== 'mobile') {
 
 } // end if (TIER !== 'mobile')
 
-// ═══════════════ WEB AUDIO (Task 3) ═══════════════
-// TODO: Mic input, speech-to-text, audio visualizer
+// ══════════ WEB AUDIO — MIC → PARTICLES ══════════
+let audioCtx = null;
+let analyser = null;
+let freqData = null;
+let micActive = false;
 
-// ═══════════════ MEDIAPIPE HAND TRACKING (Task 4) ═══════════════
-// TODO: Camera feed, finger cursor, gesture recognition
+const micBtn = document.getElementById('mic-btn');
+
+micBtn.addEventListener('click', async () => {
+  if (micActive) {
+    micActive = false;
+    micBtn.classList.remove('active');
+    document.getElementById('mic-wave').style.display = 'none';
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.8;
+    source.connect(analyser);
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    micActive = true;
+    micBtn.classList.add('active');
+    document.getElementById('mic-wave').style.display = 'block';
+  } catch (err) {
+    console.warn('Mic denied:', err);
+    micBtn.classList.add('denied');
+    micBtn.title = 'Micro non disponible';
+  }
+});
+
+// ══════════ MEDIAPIPE HAND TRACKING ══════════
+let handsModel = null;
+let cameraActive = false;
+let handLandmarks = null;
+let handFrameCount = 0;
+
+const camBtn = document.getElementById('cam-btn');
+const camPreview = document.getElementById('camera-preview');
+const camFeed = document.getElementById('camera-feed');
+const fingerCursor = document.getElementById('finger-cursor');
+
+camBtn.addEventListener('click', async () => {
+  if (cameraActive) {
+    cameraActive = false;
+    camBtn.classList.remove('active');
+    camPreview.style.display = 'none';
+    fingerCursor.style.display = 'none';
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240, facingMode: 'user' } });
+    camFeed.srcObject = stream;
+    camPreview.style.display = 'block';
+
+    // Lazy load MediaPipe
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js';
+    script.onload = () => {
+      handsModel = new window.Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`
+      });
+      handsModel.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+      handsModel.onResults((results) => {
+        handLandmarks = (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) ? results.multiHandLandmarks[0] : null;
+      });
+      cameraActive = true;
+      camBtn.classList.add('active');
+      fingerCursor.style.display = 'block';
+      processHandFrame();
+    };
+    document.head.appendChild(script);
+  } catch (err) {
+    console.warn('Camera/MediaPipe failed:', err);
+    camBtn.classList.add('denied');
+    camBtn.title = 'Camera non disponible';
+  }
+});
+
+async function processHandFrame() {
+  if (!cameraActive || !handsModel) return;
+  handFrameCount++;
+  if (handFrameCount % 3 === 0) {
+    await handsModel.send({ image: camFeed });
+  }
+  requestAnimationFrame(processHandFrame);
+}
+
+function detectGesture(landmarks) {
+  if (!landmarks) return { type: 'none' };
+  const tips = [4, 8, 12, 16, 20];
+  const pips = [3, 6, 10, 14, 18];
+  const extended = tips.map((tip, i) => {
+    if (i === 0) return Math.abs(landmarks[tip].x - landmarks[pips[i]].x) > 0.05;
+    return landmarks[tip].y < landmarks[pips[i]].y;
+  });
+  const thumbTip = landmarks[4], indexTip = landmarks[8];
+  const pinchDist = Math.sqrt((thumbTip.x - indexTip.x) ** 2 + (thumbTip.y - indexTip.y) ** 2);
+  if (pinchDist < 0.06) return { type: 'pinch', distance: pinchDist };
+  const onlyIndex = extended[1] && !extended[2] && !extended[3] && !extended[4];
+  if (onlyIndex) return { type: 'point', x: indexTip.x, y: indexTip.y };
+  if (extended.every(e => e)) return { type: 'palm', x: landmarks[9].x, y: landmarks[9].y };
+  return { type: 'none' };
+}
 
 </script>
 </body>
