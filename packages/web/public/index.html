@@ -666,6 +666,16 @@ document.querySelectorAll('a[href^="#"]').forEach(a => {
   });
 });
 
+// ═══════════════ FORWARD DECLARATIONS (used by animation loop + event handlers) ═══════════════
+let audioCtx = null;
+let analyser = null;
+let freqData = null;
+let micActive = false;
+let handsModel = null;
+let cameraActive = false;
+let handLandmarks = null;
+let handFrameCount = 0;
+
 // ═══════════════ THREE.JS SCENE + PARTICLE VORTEX ═══════════════
 if (TIER !== 'mobile') {
 
@@ -1105,10 +1115,6 @@ if (TIER === 'mobile') {
 }
 
 // ══════════ WEB AUDIO — MIC → PARTICLES ══════════
-let audioCtx = null;
-let analyser = null;
-let freqData = null;
-let micActive = false;
 
 const micBtn = document.getElementById('mic-btn');
 
@@ -1139,10 +1145,6 @@ micBtn.addEventListener('click', async () => {
 });
 
 // ══════════ MEDIAPIPE HAND TRACKING ══════════
-let handsModel = null;
-let cameraActive = false;
-let handLandmarks = null;
-let handFrameCount = 0;
 
 const camBtn = document.getElementById('cam-btn');
 const camPreview = document.getElementById('camera-preview');
