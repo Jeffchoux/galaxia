@@ -1023,6 +1023,87 @@ if (TIER !== 'mobile') {
 
 } // end if (TIER !== 'mobile')
 
+// ══════════ MOBILE FALLBACK — CANVAS 2D ══════════
+if (TIER === 'mobile') {
+  const canvas = document.getElementById('galaxy-canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  const STAR_COUNT = 2000;
+  const stars = [];
+  function createStars() {
+    stars.length = 0;
+    for (let i = 0; i < STAR_COUNT; i++) {
+      stars.push({
+        x: Math.random() * W, y: Math.random() * H,
+        r: Math.random() * 1.5 + 0.3, alpha: Math.random(),
+        speed: Math.random() * 0.0008 + 0.0002,
+        phase: Math.random() * Math.PI * 2,
+        depth: Math.random()
+      });
+    }
+  }
+
+  let touchX = 0, touchY = 0;
+  canvas.addEventListener('touchmove', (e) => {
+    touchX = e.touches[0].clientX - W / 2;
+    touchY = e.touches[0].clientY - H / 2;
+  }, { passive: true });
+
+  if (window.DeviceOrientationEvent) {
+    window.addEventListener('deviceorientation', (e) => {
+      if (e.gamma != null) touchX = (e.gamma / 45) * W * 0.1;
+      if (e.beta != null) touchY = ((e.beta - 45) / 45) * H * 0.1;
+    }, { passive: true });
+  }
+
+  function draw(t) {
+    ctx.clearRect(0, 0, W, H);
+    // Subtle nebula
+    const g1 = ctx.createRadialGradient(W * 0.4, H * 0.4, 0, W * 0.4, H * 0.4, W * 0.4);
+    g1.addColorStop(0, 'rgba(201,151,62,0.015)');
+    g1.addColorStop(1, 'transparent');
+    ctx.fillStyle = g1;
+    ctx.fillRect(0, 0, W, H);
+
+    for (const s of stars) {
+      const twinkle = (Math.sin(t * s.speed * 2 + s.phase) + 1) / 2;
+      const a = 0.15 + twinkle * s.alpha * 0.6;
+      const px = s.x + touchX * 0.01 * s.depth;
+      const py = s.y + touchY * 0.01 * s.depth;
+      const wx = ((px % W) + W) % W;
+      const wy = ((py % H) + H) % H;
+      ctx.fillStyle = s.depth > 0.7 ? `rgba(201,151,62,${a})` : `rgba(245,240,230,${a * 0.7})`;
+      ctx.beginPath();
+      ctx.arc(wx, wy, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', () => { resize(); createStars(); });
+  resize();
+  createStars();
+  draw(0);
+
+  // Hide immersive interaction buttons on mobile
+  const micBtnEl = document.getElementById('mic-btn');
+  const camBtnEl = document.getElementById('cam-btn');
+  if (micBtnEl) micBtnEl.style.display = 'none';
+  if (camBtnEl) camBtnEl.style.display = 'none';
+  const subText = document.querySelector('.immersive-text-sub');
+  if (subText) subText.style.display = 'none';
+  const mainText = document.querySelector('.immersive-text-main');
+  if (mainText) mainText.textContent = 'Explore the Galaxy';
+  const micWaveEl = document.getElementById('mic-wave');
+  if (micWaveEl) micWaveEl.style.display = 'none';
+}
+
 // ══════════ WEB AUDIO — MIC → PARTICLES ══════════
 let audioCtx = null;
 let analyser = null;
@@ -1130,6 +1211,16 @@ function detectGesture(landmarks) {
   if (onlyIndex) return { type: 'point', x: indexTip.x, y: indexTip.y };
   if (extended.every(e => e)) return { type: 'palm', x: landmarks[9].x, y: landmarks[9].y };
   return { type: 'none' };
+}
+
+// ══════════ HERO FADE ON SCROLL ══════════
+const heroContent = document.querySelector('.hero-content');
+if (heroContent) {
+  window.addEventListener('scroll', () => {
+    const scrolled = Math.min(window.scrollY / (window.innerHeight * 0.5), 1);
+    heroContent.style.opacity = String(1 - scrolled * 0.7);
+    heroContent.style.transform = `translateY(${scrolled * 30}px)`;
+  }, { passive: true });
 }
 
 </script>
