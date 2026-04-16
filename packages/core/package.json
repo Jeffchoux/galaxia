@@ -1,0 +1,28 @@
+{
+  "name": "@galaxia/core",
+  "version": "0.1.0",
+  "description": "GALAXIA core engine — orchestrator, LLM router, state, knowledge",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./orchestrator": "./dist/orchestrator.js",
+    "./llm-router": "./dist/llm-router.js",
+    "./state": "./dist/state.js",
+    "./knowledge": "./dist/knowledge.js",
+    "./config": "./dist/config.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "galaxia",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GALAXIA - Your AI Company in a Box",
+  "author": "Jeff Choux <jeffchoux@hotmail.com>",
+  "license": "MIT",
+  "packageManager": "pnpm@9.15.4",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jeffchoux/galaxia.git"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "start": "node packages/core/dist/index.js"
+  },
+  "devDependencies": {
+    "turbo": "^2.9.0",
+    "typescript": "^5.7.0"
+  }
+}

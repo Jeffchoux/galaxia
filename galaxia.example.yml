@@ -1,0 +1,40 @@
+# GALAXIA Configuration
+# Documentation: https://github.com/Jeffchoux/galaxia
+
+business:
+  name: "My Project"
+  description: "An awesome AI-powered project"
+
+llm:
+  default: groq
+  providers:
+    groq:
+      model: llama-3.3-70b-versatile
+      # Get free key at console.groq.com
+      # api_key: gsk_xxx (or set GROQ_API_KEY env var)
+    ollama:
+      url: http://localhost:11434
+      model: llama3.2
+    claude:
+      model: claude-sonnet-4-6
+      # Only used for heavy tasks (code generation)
+      # api_key: sk-ant-xxx (or set ANTHROPIC_API_KEY env var)
+
+projects:
+  - name: my-app
+    path: /opt/my-app
+    # pm2_name: my-app    # if managed by PM2
+    # port: 3000           # for health checks
+
+agents:
+  mode: mission          # mission (targeted) or continuous (loop)
+  cycle_interval: 3600   # seconds between cycles (min: 600)
+
+notifications:
+  telegram:
+    enabled: false
+    # bot_token: xxx
+    # chat_id: xxx
+  discord:
+    enabled: false
+    # webhook_url: xxx
