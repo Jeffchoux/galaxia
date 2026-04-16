@@ -1,0 +1,7 @@
+{
+  "name": "blog",
+  "displayName": "Blog / Content Site",
+  "description": "Simple blog with markdown posts, SQLite storage, and admin panel",
+  "keywords": ["blog", "content", "website", "posts", "articles", "writing"],
+  "ports": { "default": 3000 }
+}

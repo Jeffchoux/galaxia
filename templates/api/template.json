@@ -1,0 +1,7 @@
+{
+  "name": "api",
+  "displayName": "REST API",
+  "description": "Express REST API with SQLite, auth, and CRUD endpoints",
+  "keywords": ["api", "backend", "server", "rest", "service"],
+  "ports": { "default": 3000 }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "landing",
+  "displayName": "Landing Page",
+  "description": "Conversion-optimized landing page with email capture and analytics",
+  "keywords": ["landing", "page", "marketing", "launch", "waitlist", "coming soon"],
+  "ports": { "default": 3000 }
+}

@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a1a"/>
+      <stop offset="100%" style="stop-color:#1a0a2e"/>
+    </linearGradient>
+    <linearGradient id="text-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#7B61FF"/>
+      <stop offset="50%" style="stop-color:#00D4FF"/>
+      <stop offset="100%" style="stop-color:#7B61FF"/>
+    </linearGradient>
+    <linearGradient id="sub-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#a0a0c0"/>
+      <stop offset="100%" style="stop-color:#c0c0e0"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <radialGradient id="planet1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#7B61FF"/>
+      <stop offset="100%" style="stop-color:#3a2e80"/>
+    </radialGradient>
+    <radialGradient id="planet2" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#00D4FF"/>
+      <stop offset="100%" style="stop-color:#006680"/>
+    </radialGradient>
+    <radialGradient id="planet3" cx="40%" cy="40%" r="50%">
+      <stop offset="0%" style="stop-color:#FF6B9D"/>
+      <stop offset="100%" style="stop-color:#802040"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="800" height="200" fill="url(#bg)" rx="12"/>
+
+  <!-- Stars -->
+  <circle cx="50" cy="30" r="1" fill="#fff" opacity="0.6"/>
+  <circle cx="120" cy="80" r="0.8" fill="#fff" opacity="0.4"/>
+  <circle cx="200" cy="20" r="1.2" fill="#fff" opacity="0.5"/>
+  <circle cx="350" cy="45" r="0.8" fill="#fff" opacity="0.3"/>
+  <circle cx="500" cy="25" r="1" fill="#fff" opacity="0.5"/>
+  <circle cx="600" cy="60" r="0.6" fill="#fff" opacity="0.4"/>
+  <circle cx="700" cy="35" r="1.1" fill="#fff" opacity="0.6"/>
+  <circle cx="750" cy="80" r="0.7" fill="#fff" opacity="0.3"/>
+  <circle cx="80" cy="160" r="0.9" fill="#fff" opacity="0.4"/>
+  <circle cx="180" cy="170" r="0.7" fill="#fff" opacity="0.5"/>
+  <circle cx="420" cy="175" r="1" fill="#fff" opacity="0.3"/>
+  <circle cx="650" cy="150" r="0.8" fill="#fff" opacity="0.5"/>
+  <circle cx="730" cy="170" r="1" fill="#fff" opacity="0.4"/>
+
+  <!-- Planets -->
+  <circle cx="100" cy="100" r="18" fill="url(#planet1)" filter="url(#glow)" opacity="0.8"/>
+  <circle cx="680" cy="90" r="14" fill="url(#planet2)" filter="url(#glow)" opacity="0.7"/>
+  <circle cx="740" cy="140" r="10" fill="url(#planet3)" filter="url(#glow)" opacity="0.6"/>
+
+  <!-- Orbit rings -->
+  <ellipse cx="100" cy="100" rx="30" ry="10" fill="none" stroke="#7B61FF" stroke-width="0.5" opacity="0.3"/>
+  <ellipse cx="680" cy="90" rx="24" ry="8" fill="none" stroke="#00D4FF" stroke-width="0.5" opacity="0.3"/>
+
+  <!-- Agent dots on orbits -->
+  <circle cx="130" cy="98" r="2.5" fill="#00D4FF" filter="url(#glow)"/>
+  <circle cx="75" cy="105" r="2" fill="#FF6B9D" filter="url(#glow)"/>
+  <circle cx="700" cy="84" r="2" fill="#7B61FF" filter="url(#glow)"/>
+
+  <!-- Title -->
+  <text x="400" y="88" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="52" font-weight="800" fill="url(#text-grad)" filter="url(#glow)" letter-spacing="8">GALAXIA</text>
+
+  <!-- Subtitle -->
+  <text x="400" y="125" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="url(#sub-grad)" letter-spacing="4">YOUR AI COMPANY IN A BOX</text>
+
+  <!-- Badges -->
+  <rect x="240" y="145" width="100" height="22" rx="11" fill="#7B61FF" opacity="0.2"/>
+  <text x="290" y="160" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#7B61FF">Open Source</text>
+
+  <rect x="350" y="145" width="100" height="22" rx="11" fill="#00D4FF" opacity="0.2"/>
+  <text x="400" y="160" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#00D4FF">$0 AI Cost</text>
+
+  <rect x="460" y="145" width="100" height="22" rx="11" fill="#FF6B9D" opacity="0.2"/>
+  <text x="510" y="160" text-anchor="middle" font-family="system-ui, sans-serif" font-size="10" fill="#FF6B9D">10 Agents</text>
+</svg>
