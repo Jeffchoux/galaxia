@@ -10,7 +10,7 @@ import type {
   CycleReport,
   AgentAction,
 } from './types.js';
-import { callLLM } from './llm-router.js';
+import { callLLMByTier } from './llm-router.js';
 import { loadState, updateState } from './state.js';
 import { addKnowledge } from './knowledge.js';
 import { notify } from './notifications.js';
@@ -111,7 +111,7 @@ async function triageProject(
   const prompt = buildTriagePrompt(projectName, projectPath, pm2Status, metrics, stateStr);
 
   try {
-    const response = await callLLM('light', prompt, config);
+    const response = await callLLMByTier('light', prompt, config);
 
     // Extract JSON from response (handle possible markdown wrapping)
     const jsonMatch = response.match(/\{[\s\S]*\}/);
