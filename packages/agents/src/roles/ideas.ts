@@ -1,4 +1,4 @@
-import type { AgentType, LLMTier } from '@galaxia/core';
+import type { AgentType, DataClass, LLMTier, TaskType } from '@galaxia/core';
 import { BaseAgent } from '../base-agent.js';
 import type { AgentContext } from '../types.js';
 
@@ -11,6 +11,8 @@ export class IdeasAgent extends BaseAgent {
   readonly name: AgentType = 'ideas';
   readonly description = 'Brainstorms features, evaluates feasibility, and scores impact vs effort.';
   readonly tier: LLMTier = 'light';
+  readonly defaultDataClass: DataClass = 'public';
+  readonly defaultTaskType: TaskType = 'creative-writing';
 
   getSystemPrompt(ctx: AgentContext): string {
     return [

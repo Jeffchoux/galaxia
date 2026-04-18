@@ -1,4 +1,4 @@
-import type { AgentType, LLMTier } from '@galaxia/core';
+import type { AgentType, DataClass, LLMTier, TaskType } from '@galaxia/core';
 import { BaseAgent } from '../base-agent.js';
 import type { AgentContext } from '../types.js';
 
@@ -11,6 +11,8 @@ export class VeilleAgent extends BaseAgent {
   readonly name: AgentType = 'veille';
   readonly description = 'Monitors tech news and identifies relevant updates for the stack.';
   readonly tier: LLMTier = 'light';
+  readonly defaultDataClass: DataClass = 'public';
+  readonly defaultTaskType: TaskType = 'search';
 
   getSystemPrompt(ctx: AgentContext): string {
     return [
