@@ -10,10 +10,13 @@
 //     unchanged until Phase 3.1 migrates them.
 
 import { createHash } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import type { GalaxiaConfig, LLMTier, LLMProvider, LLMProviderConfig } from './types.js';
 import type { RoutingContext, RoutingDecision, RoutingAuditEntry } from './routing/types.js';
 import { decide } from './routing/engine.js';
 import { logRouting } from './routing/audit.js';
+
+type ClaudeTransport = 'cli' | 'http';
 
 interface GroqResponse {
   choices?: Array<{ message?: { content?: string } }>;
@@ -77,12 +80,16 @@ interface AnthropicResponse {
   error?: { type?: string; message?: string };
 }
 
-// Anthropic HTTP API (replaces the old `claude` CLI invocation so Galaxia
-// does not depend on Claude Code being installed and authenticated on the
-// runtime user account).
+// Claude dual transport — CLI first (Claude Max subscription quota), HTTP
+// fallback (billed per token via api.anthropic.com).
 // Valid model IDs (2026-04): claude-sonnet-4-5-20250929 (default),
-// claude-opus-4-20250514, claude-haiku-4-5-20251001.
-async function callClaude(prompt: string, config: LLMProviderConfig): Promise<string> {
+// claude-opus-4-20250514, claude-haiku-4-5-20251001. The CLI also accepts
+// short aliases: 'sonnet', 'opus', 'haiku'.
+
+// Anthropic HTTP API — portable, works on any host with an API key, billed
+// per token. Used as the fallback when the local `claude` CLI is absent,
+// unauthenticated, or when the caller explicitly picks transport:'http'.
+async function callClaudeHTTP(prompt: string, config: LLMProviderConfig): Promise<string> {
   const apiKey = config.apiKey || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
 
@@ -118,6 +125,96 @@ async function callClaude(prompt: string, config: LLMProviderConfig): Promise<st
   return data.content?.[0]?.text ?? '';
 }
 
+// Local `claude` CLI (Claude Code). Draws from the Claude Max subscription
+// quota instead of the per-token API balance. Prompt is piped via stdin to
+// avoid ARG_MAX limits on long prompts. Resolved via PATH so `transport:
+// 'cli'` remains a no-op on hosts where the CLI is not installed (we catch
+// ENOENT and surface it to the dual-transport wrapper for HTTP fallback).
+async function callClaudeCLI(prompt: string, config: LLMProviderConfig): Promise<string> {
+  const timeoutMs = config.timeoutMs ?? 60_000;
+  const model = config.model || 'sonnet';
+
+  return new Promise<string>((resolve, reject) => {
+    const child = spawn('claude', ['-p', '--model', model], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+
+    const timer = setTimeout(() => {
+      try { child.kill('SIGTERM'); } catch { /* noop */ }
+      settle(() => reject(new Error(`Claude CLI timed out after ${timeoutMs}ms`)));
+    }, timeoutMs);
+
+    child.stdout.on('data', (d: Buffer) => { stdout += d.toString('utf8'); });
+    child.stderr.on('data', (d: Buffer) => { stderr += d.toString('utf8'); });
+
+    child.on('error', (err: NodeJS.ErrnoException) => {
+      const hint = err.code === 'ENOENT' ? ' (binary not found on PATH)' : '';
+      settle(() => reject(new Error(`Claude CLI spawn failed: ${err.message}${hint}`)));
+    });
+
+    child.on('close', (code: number | null) => {
+      settle(() => {
+        if (code !== 0) {
+          const msg = stderr.trim() || stdout.trim() || `exit code ${code}`;
+          reject(new Error(`Claude CLI exited non-zero: ${msg}`));
+          return;
+        }
+        resolve(stdout.trim());
+      });
+    });
+
+    child.stdin.on('error', (err: Error) => {
+      settle(() => reject(new Error(`Claude CLI stdin error: ${err.message}`)));
+    });
+    child.stdin.end(prompt, 'utf8');
+  });
+}
+
+// Dual-transport entry: tries the CLI first (unless the caller opted out),
+// falls back to HTTP on any CLI failure (missing binary, auth, timeout,
+// non-zero exit). Returns the transport that actually served the response
+// so callLLM can stamp it on the routing audit entry.
+async function callClaude(
+  prompt: string,
+  config: LLMProviderConfig,
+): Promise<{ text: string; transport: ClaudeTransport }> {
+  const preferred: ClaudeTransport = config.transport ?? 'cli';
+
+  if (preferred === 'cli') {
+    try {
+      const text = await callClaudeCLI(prompt, config);
+      return { text, transport: 'cli' };
+    } catch (cliErr) {
+      console.error(
+        `[llm-router] Claude CLI failed, falling back to HTTP: ${(cliErr as Error).message}`,
+      );
+    }
+  }
+
+  const text = await callClaudeHTTP(prompt, config);
+  return { text, transport: 'http' };
+}
+
+// Thin adapter so the legacy tier-only router (callLLMByTier) and the
+// PROVIDER_FN dispatch table keep a uniform Promise<string> signature. The
+// context-aware path (invokeProvider) bypasses this and reads transport
+// directly from callClaude.
+async function callClaudeString(prompt: string, config: LLMProviderConfig): Promise<string> {
+  const { text } = await callClaude(prompt, config);
+  return text;
+}
+
 async function callOpenAI(prompt: string, config: LLMProviderConfig): Promise<string> {
   const apiKey = config.apiKey || process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY not set');
@@ -148,7 +245,7 @@ type ProviderFn = (prompt: string, config: LLMProviderConfig) => Promise<string>
 const PROVIDER_FN: Record<string, ProviderFn> = {
   groq: callGroq,
   ollama: callOllama,
-  claude: callClaude,
+  claude: callClaudeString,
   openai: callOpenAI,
 };
 
@@ -214,14 +311,20 @@ async function invokeProvider(
   tier: LLMTier,
   prompt: string,
   config: GalaxiaConfig,
-): Promise<string> {
-  const fn = PROVIDER_FN[provider];
-  if (!fn) throw new Error(`Unknown LLM provider: ${provider}`);
-  // Use the tier's provider config as base (api keys, urls) but override the
-  // model with whatever the routing decision picked.
+): Promise<{ text: string; transport: ClaudeTransport | null }> {
+  // Use the tier's provider config as base (api keys, urls, transport prefs)
+  // but override the model with whatever the routing decision picked.
   const baseCfg = config.llm[tier];
   const cfg: LLMProviderConfig = { ...baseCfg, provider, model };
-  return fn(prompt, cfg);
+
+  if (provider === 'claude') {
+    return callClaude(prompt, cfg);
+  }
+
+  const fn = PROVIDER_FN[provider];
+  if (!fn) throw new Error(`Unknown LLM provider: ${provider}`);
+  const text = await fn(prompt, cfg);
+  return { text, transport: null };
 }
 
 /**
@@ -274,7 +377,8 @@ export async function callLLM(
 
   // Primary attempt
   try {
-    const text = await invokeProvider(decision.provider, decision.model, decision.tier, prompt, config);
+    const { text, transport } = await invokeProvider(decision.provider, decision.model, decision.tier, prompt, config);
+    decision.transport = transport;
     writeAudit(true, undefined);
     return { text, decision };
   } catch (primaryErr) {
@@ -299,7 +403,8 @@ export async function callLLM(
       if (!PROVIDER_FN[fbCfg.provider]) continue;
       try {
         console.error(`[llm-router] fallback → ${fbTier} (${fbCfg.provider}/${fbCfg.model})`);
-        const text = await invokeProvider(fbCfg.provider, fbCfg.model, fbTier, prompt, config);
+        const { text, transport } = await invokeProvider(fbCfg.provider, fbCfg.model, fbTier, prompt, config);
+        decision.transport = transport;
         decision.fallbackTried.push(`${fbCfg.provider}(${fbCfg.model})`);
         writeAudit(true, `primary failed: ${primaryMsg}. recovered on ${fbTier}.`);
         return { text, decision };
