@@ -9,7 +9,6 @@
 //     an alias so the orchestrator and any existing caller keep working
 //     unchanged until Phase 3.1 migrates them.
 
-import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import type { GalaxiaConfig, LLMTier, LLMProvider, LLMProviderConfig } from './types.js';
 import type { RoutingContext, RoutingDecision, RoutingAuditEntry } from './routing/types.js';
@@ -73,17 +72,50 @@ async function callOllama(prompt: string, config: LLMProviderConfig): Promise<st
   return data.response ?? '';
 }
 
+interface AnthropicResponse {
+  content?: Array<{ type?: string; text?: string }>;
+  error?: { type?: string; message?: string };
+}
+
+// Anthropic HTTP API (replaces the old `claude` CLI invocation so Galaxia
+// does not depend on Claude Code being installed and authenticated on the
+// runtime user account).
+// Valid model IDs (2026-04): claude-sonnet-4-5-20250929 (default),
+// claude-opus-4-20250514, claude-haiku-4-5-20251001.
 async function callClaude(prompt: string, config: LLMProviderConfig): Promise<string> {
-  try {
-    const model = config.model || 'sonnet';
-    const output = execSync(
-      `claude --model ${model} -p ${JSON.stringify(prompt)}`,
-      { encoding: 'utf-8', timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
-    );
-    return output.trim();
-  } catch (err) {
-    throw new Error(`Claude CLI error: ${(err as Error).message}`);
+  const apiKey = config.apiKey || process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
+
+  const model = config.model || 'claude-sonnet-4-5-20250929';
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (res.status !== 200) {
+    let errBody = '';
+    try {
+      const j = (await res.json()) as AnthropicResponse;
+      errBody = j.error?.message ?? JSON.stringify(j);
+    } catch {
+      errBody = await res.text().catch(() => '');
+    }
+    throw new Error(`Anthropic API error: ${res.status} ${res.statusText} — ${errBody}`);
   }
+
+  const data = (await res.json()) as AnthropicResponse;
+  if (data.error) throw new Error(`Anthropic: ${data.error.message}`);
+  return data.content?.[0]?.text ?? '';
 }
 
 async function callOpenAI(prompt: string, config: LLMProviderConfig): Promise<string> {
