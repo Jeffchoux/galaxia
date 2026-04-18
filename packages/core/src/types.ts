@@ -49,6 +49,11 @@ export interface GalaxiaConfig {
   };
   projects: Project[];
   dataDir: string;
+  // Routing doctrine — Pilier 4.bis. Declared here as `unknown` shape in the
+  // Core's type to avoid a circular import with ./routing; the real shape
+  // lives in ./routing/types.ts (RoutingConfig). Consumers that need typed
+  // access import it directly from '@galaxia/core' (re-exported below).
+  routing?: import('./routing/types.js').RoutingConfig;
 }
 
 export interface AgentAction {

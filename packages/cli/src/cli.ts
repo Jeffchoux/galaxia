@@ -18,6 +18,11 @@ import {
   missionsFilePath,
   knowledgeDir,
   configSearchPaths,
+  loadConfig,
+  queryAudit,
+  type AuditQuery,
+  type DataClass,
+  type RoutingAuditEntry,
 } from '@galaxia/core';
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -755,6 +760,7 @@ function cmdHelp(): void {
   console.log(`    ${C.cyan}stop${C.reset}                          Stop the daemon`);
   console.log(`    ${C.cyan}logs${C.reset}                          Tail orchestrator logs`);
   console.log(`    ${C.cyan}knowledge${C.reset} ${C.dim}[project]${C.reset}            Show knowledge base`);
+  console.log(`    ${C.cyan}routing audit${C.reset} ${C.dim}[filters]${C.reset}         Show recent LLM routing decisions`);
   console.log(`    ${C.cyan}version${C.reset}                       Print version`);
   console.log(`    ${C.cyan}help${C.reset}                          Show this help`);
   console.log('');
@@ -797,6 +803,119 @@ function appendLog(message: string): void {
   try {
     writeFileSync(logFile, `${existsSync(logFile) ? readFileSync(logFile, 'utf-8') : ''}${ts} ${message}\n`, 'utf-8');
   } catch { /* ignore */ }
+}
+
+// ── Routing audit ──────────────────────────────────────────────────────────
+
+function parseDurationToDate(s: string): Date | null {
+  const m = /^(\d+)([smhd])$/.exec(s.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  const mult: Record<string, number> = { s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000 };
+  return new Date(Date.now() - n * mult[m[2]]);
+}
+
+function padEnd(s: string, n: number): string {
+  if (s.length >= n) return s.slice(0, n - 1) + '…';
+  return s + ' '.repeat(n - s.length);
+}
+
+function fmtLocalTime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const da = String(d.getDate()).padStart(2, '0');
+    return `${mo}-${da} ${hh}:${mm}:${ss}`;
+  } catch {
+    return iso;
+  }
+}
+
+function cmdRoutingAudit(args: string[]): void {
+  const query: AuditQuery = { limit: 20 };
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--since' && args[i + 1]) {
+      const d = parseDurationToDate(args[++i]);
+      if (!d) {
+        console.error(`  ${C.red}${SYM.cross} Invalid --since value. Use 5m, 2h, 1d, 30s.${C.reset}`);
+        process.exit(1);
+      }
+      query.since = d;
+    } else if (a === '--project' && args[i + 1]) {
+      query.projectTag = args[++i];
+    } else if (a === '--class' && args[i + 1]) {
+      query.dataClass = args[++i] as DataClass;
+    } else if (a === '--rule' && args[i + 1]) {
+      query.ruleName = args[++i];
+    } else if (a === '--limit' && args[i + 1]) {
+      query.limit = parseInt(args[++i], 10) || 20;
+    } else if (a === '--help' || a === '-h') {
+      console.log('Usage: galaxia routing audit [--since 1h] [--project NAME] [--class CLASS] [--rule NAME] [--limit N]');
+      return;
+    }
+  }
+
+  const config = loadConfig();
+  const entries = queryAudit(query, config);
+
+  console.log('');
+  console.log(`  ${C.bold}${C.cyan}GALAXIA routing audit${C.reset}  ${C.dim}(${entries.length} entr${entries.length === 1 ? 'y' : 'ies'})${C.reset}`);
+  console.log(`  ${C.dim}${line(90)}${C.reset}`);
+
+  if (entries.length === 0) {
+    console.log(`  ${C.dim}No entries match this filter.${C.reset}`);
+    console.log('');
+    return;
+  }
+
+  // Header
+  console.log(
+    '  ' +
+    C.bold +
+    padEnd('WHEN', 16) +
+    padEnd('RULE', 26) +
+    padEnd('CLASS', 14) +
+    padEnd('TASK', 16) +
+    padEnd('PROVIDER', 20) +
+    padEnd('ms', 6) +
+    'OK' +
+    C.reset,
+  );
+
+  for (const e of entries) {
+    printAuditRow(e);
+  }
+  console.log('');
+}
+
+function printAuditRow(e: RoutingAuditEntry): void {
+  const okCol = e.success ? `${C.green}${SYM.check}${C.reset}` : `${C.red}${SYM.cross}${C.reset}`;
+  const when = fmtLocalTime(e.timestamp);
+  const rule = e.decision.matchedRule;
+  const cls = String(e.context.dataClass);
+  const task = String(e.context.taskType);
+  const prov = `${e.decision.provider}/${e.decision.model}`;
+  const ms = String(e.latencyMs);
+  console.log(
+    '  ' +
+    padEnd(when, 16) +
+    padEnd(rule, 26) +
+    padEnd(cls, 14) +
+    padEnd(task, 16) +
+    padEnd(prov, 20) +
+    padEnd(ms, 6) +
+    okCol,
+  );
+  if (e.decision.fallbackTried.length > 0) {
+    console.log(`    ${C.dim}fallback tried: ${e.decision.fallbackTried.join(' → ')}${C.reset}`);
+  }
+  if (!e.success && e.errorMessage) {
+    console.log(`    ${C.dim}${C.red}error: ${e.errorMessage}${C.reset}`);
+  }
 }
 
 // ── Main Router ────────────────────────────────────────────────────────────
@@ -842,6 +961,17 @@ async function main(): Promise<void> {
     case 'knowledge':
       cmdKnowledge(args[1]);
       break;
+
+    case 'routing': {
+      const subcommand = args[1];
+      if (subcommand === 'audit') {
+        cmdRoutingAudit(args.slice(2));
+      } else {
+        console.error(`  ${C.red}${SYM.cross} Unknown routing subcommand: ${subcommand ?? '(none)'}${C.reset}`);
+        console.log(`  ${C.dim}Usage: galaxia routing audit [--since 1h] [--project NAME] [--class CLASS] [--rule NAME] [--limit N]${C.reset}`);
+      }
+      break;
+    }
 
     case 'run':
       await cmdRun();

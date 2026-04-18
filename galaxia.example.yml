@@ -38,3 +38,58 @@ notifications:
   discord:
     enabled: false
     # webhook_url: xxx
+
+# ─── Contextual routing (Pilier 4.bis) ──────────────────────────────────────
+# Galaxia's core doctrine: you decide, data class by data class, task type by
+# task type, which model handles what. The framework enforces the decision,
+# logs it for traceability, and refuses to silently fall back over
+# confidentiality boundaries.
+#
+# Rules are evaluated top-to-bottom, first match wins. Built-in defaults
+# (confidential/secret → local + no fallback, public → light, etc.) are
+# appended at the end, so minimal rules are enough to get started.
+#
+# The `strictLocalOnly` flag (default: true) is a structural safety net: if
+# any context carries dataClass `confidential` or `secret`, Galaxia forces
+# tier=local and forbidFallback=true REGARDLESS of what the matched rule
+# said. This is the manifesto § 3.bis guarantee — the framework doesn't
+# depend on rule authors remembering to be careful.
+#
+# # routing:
+# #   strictLocalOnly: true              # manifesto-compliant default
+# #   auditLogMaxMB: 10                  # rotate audit JSONL at this size
+# #   rules:
+# #     # 1. All client emails stay local, even if I typed 'personal' by mistake.
+# #     - name: client-emails-stay-local
+# #       description: Mail from verified client domains — strict local.
+# #       when:
+# #         dataClassIn: [personal, professional, confidential]
+# #         projectTag: inbox
+# #       then:
+# #         tier: local
+# #         forbidFallback: true
+# #
+# #     # 2. Public content (LinkedIn drafts, blog posts) can hit Groq.
+# #     - name: public-content-light
+# #       when: { dataClass: public }
+# #       then: { tier: light }
+# #
+# #     # 3. Creative writing uses Claude for quality.
+# #     - name: creative-writing-claude
+# #       when: { taskType: creative-writing }
+# #       then: { tier: heavy }
+# #
+# #     # 4. Weekend code-gen: indulge the Anthropic bill.
+# #     - name: weekend-codegen
+# #       when:
+# #         taskType: code-gen
+# #         timeWindow:
+# #           daysOfWeek: [0, 6]          # 0 = Sunday, 6 = Saturday
+# #       then:
+# #         tier: heavy
+# #
+# #     # 5. High-sensitivity override: anything the agent tagged sensitivity>=8
+# #     #    goes local-only, regardless of dataClass.
+# #     - name: high-sensitivity-local
+# #       when: { minSensitivity: 8 }
+# #       then: { tier: local, forbidFallback: true }
