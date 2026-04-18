@@ -3,30 +3,10 @@
 
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { GalaxiaState } from './types.js';
-
-function resolveDataDir(dataDir?: string): string {
-  if (dataDir) return dataDir;
-  // Check common locations
-  const candidates = [
-    join(homedir(), '.galaxia', 'data'),
-    '/var/lib/galaxia',
-  ];
-  for (const dir of candidates) {
-    if (existsSync(dir)) return dir;
-  }
-  // Default: create in home
-  const defaultDir = join(homedir(), '.galaxia', 'data');
-  mkdirSync(defaultDir, { recursive: true });
-  return defaultDir;
-}
-
-function stateFilePath(dataDir?: string): string {
-  return join(resolveDataDir(dataDir), 'state.json');
-}
+import { stateFilePath } from './paths.js';
 
 export function getDefaultState(): GalaxiaState {
   return {

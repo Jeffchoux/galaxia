@@ -2,17 +2,9 @@
 // Format: ## YYYY-MM-DD | category\n content
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, appendFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { dirname } from 'node:path';
 import type { KnowledgeEntry } from './types.js';
-
-function resolveDataDir(dataDir?: string): string {
-  return dataDir || join(homedir(), '.galaxia', 'data');
-}
-
-function knowledgePath(project: string, dataDir?: string): string {
-  return join(resolveDataDir(dataDir), 'projects', project, 'KNOWLEDGE.md');
-}
+import { knowledgeFilePath } from './paths.js';
 
 /**
  * Parse KNOWLEDGE.md into structured entries.
@@ -21,7 +13,7 @@ function knowledgePath(project: string, dataDir?: string): string {
  * Fixed login timeout issue by increasing session TTL.
  */
 export function loadKnowledge(project: string, dataDir?: string): KnowledgeEntry[] {
-  const filePath = knowledgePath(project, dataDir);
+  const filePath = knowledgeFilePath(project, dataDir);
 
   if (!existsSync(filePath)) {
     return [];
@@ -67,9 +59,8 @@ function parseKnowledgeMd(content: string, project: string): KnowledgeEntry[] {
  * Append a new knowledge entry to the project's KNOWLEDGE.md.
  */
 export function addKnowledge(project: string, entry: KnowledgeEntry, dataDir?: string): void {
-  const filePath = knowledgePath(project, dataDir);
-  const dir = join(resolveDataDir(dataDir), 'projects', project);
-  mkdirSync(dir, { recursive: true });
+  const filePath = knowledgeFilePath(project, dataDir);
+  mkdirSync(dirname(filePath), { recursive: true });
 
   const block = `\n## ${entry.date} | ${entry.category}\n${entry.content}\n`;
 

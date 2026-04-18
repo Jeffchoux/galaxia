@@ -5,20 +5,24 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { homedir } from 'node:os';
 import { execSync, spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
+import {
+  resolveDataDir,
+  stateFilePath,
+  stateDir,
+  logFilePath,
+  logsDir,
+  pidFilePath,
+  missionsFilePath,
+  knowledgeDir,
+  configSearchPaths,
+} from '@galaxia/core';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const VERSION = '0.1.0';
-const GALAXIA_DIR = join(homedir(), '.galaxia');
-const DATA_DIR = join(GALAXIA_DIR, 'data');
-const LOG_FILE = join(DATA_DIR, 'orchestrator.log');
-const PID_FILE = join(DATA_DIR, 'daemon.pid');
-const MISSIONS_FILE = join(DATA_DIR, 'missions.json');
-const STATE_FILE = join(DATA_DIR, 'state.json');
 
 // ── Unicode Helpers ────────────────────────────────────────────────────────
 
@@ -73,7 +77,10 @@ function boxLine(content: string, width = 56): string {
 // ── Ensure Data Dirs ───────────────────────────────────────────────────────
 
 function ensureDirs(): void {
-  mkdirSync(DATA_DIR, { recursive: true });
+  mkdirSync(resolveDataDir(), { recursive: true });
+  mkdirSync(stateDir(), { recursive: true });
+  mkdirSync(logsDir(), { recursive: true });
+  mkdirSync(knowledgeDir(), { recursive: true });
 }
 
 // ── State Helpers ──────────────────────────────────────────────────────────
@@ -87,9 +94,10 @@ interface Mission {
 }
 
 function loadMissions(): Mission[] {
-  if (!existsSync(MISSIONS_FILE)) return [];
+  const file = missionsFilePath();
+  if (!existsSync(file)) return [];
   try {
-    return JSON.parse(readFileSync(MISSIONS_FILE, 'utf-8')) as Mission[];
+    return JSON.parse(readFileSync(file, 'utf-8')) as Mission[];
   } catch {
     return [];
   }
@@ -97,13 +105,14 @@ function loadMissions(): Mission[] {
 
 function saveMissions(missions: Mission[]): void {
   ensureDirs();
-  writeFileSync(MISSIONS_FILE, JSON.stringify(missions, null, 2), 'utf-8');
+  writeFileSync(missionsFilePath(), JSON.stringify(missions, null, 2), 'utf-8');
 }
 
 function loadStateFile(): Record<string, unknown> {
-  if (!existsSync(STATE_FILE)) return {};
+  const file = stateFilePath();
+  if (!existsSync(file)) return {};
   try {
-    return JSON.parse(readFileSync(STATE_FILE, 'utf-8')) as Record<string, unknown>;
+    return JSON.parse(readFileSync(file, 'utf-8')) as Record<string, unknown>;
   } catch {
     return {};
   }
@@ -129,12 +138,7 @@ function getSystemMetrics(): { cpu: string; ram: string; disk: string } {
 // ── Config Helpers ─────────────────────────────────────────────────────────
 
 function findConfigPath(): string | null {
-  const candidates = [
-    'galaxia.yml',
-    join(GALAXIA_DIR, 'config.yml'),
-    '/etc/galaxia/config.yml',
-  ];
-  for (const p of candidates) {
+  for (const p of configSearchPaths()) {
     if (existsSync(p)) return p;
   }
   return null;
@@ -252,13 +256,12 @@ notifications:
 
   // Create data directories
   ensureDirs();
-  mkdirSync(join(DATA_DIR, 'knowledge'), { recursive: true });
-  mkdirSync(join(DATA_DIR, 'logs'), { recursive: true });
-  mkdirSync(join(DATA_DIR, 'backups'), { recursive: true });
+  mkdirSync(join(resolveDataDir(), 'backups'), { recursive: true });
 
   // Initialize empty state
-  if (!existsSync(STATE_FILE)) {
-    writeFileSync(STATE_FILE, JSON.stringify({
+  const initialStatePath = stateFilePath();
+  if (!existsSync(initialStatePath)) {
+    writeFileSync(initialStatePath, JSON.stringify({
       system: { cpu: '0%', ram: '0%', disk: '0%', pm2Online: '0/0' },
       projects: {},
       lastUpdated: new Date().toISOString(),
@@ -267,13 +270,13 @@ notifications:
   }
 
   // Initialize empty missions
-  if (!existsSync(MISSIONS_FILE)) {
+  if (!existsSync(missionsFilePath())) {
     saveMissions([]);
   }
 
   console.log('');
   console.log(`  ${C.green}${SYM.check} Configuration written to galaxia.yml${C.reset}`);
-  console.log(`  ${C.green}${SYM.check} Data directories created at ${DATA_DIR}${C.reset}`);
+  console.log(`  ${C.green}${SYM.check} Data directories created at ${resolveDataDir()}${C.reset}`);
   console.log('');
   console.log(`  ${C.bold}${C.cyan}${line(44)}${C.reset}`);
   console.log(`  ${C.bold}${C.cyan}  Welcome to GALAXIA, ${name}!${C.reset}`);
@@ -297,15 +300,15 @@ function cmdStatus(): void {
   const activeMissions = missions.filter(m => m.status === 'pending' || m.status === 'in_progress').length;
   const completedMissions = missions.filter(m => m.status === 'completed').length;
 
-  // Count knowledge entries
+  // Count knowledge entries across $dataDir/memory/projects/*/KNOWLEDGE.md
   let knowledgeCount = 0;
-  const knowledgeDir = join(DATA_DIR, 'knowledge');
-  if (existsSync(knowledgeDir)) {
+  const memoryProjects = join(knowledgeDir(), 'projects');
+  if (existsSync(memoryProjects)) {
     try {
-      const files = readdirSync(knowledgeDir);
-      for (const file of files) {
-        if (file.endsWith('.md')) {
-          const content = readFileSync(join(knowledgeDir, file), 'utf-8');
+      for (const projName of readdirSync(memoryProjects)) {
+        const kPath = join(memoryProjects, projName, 'KNOWLEDGE.md');
+        if (existsSync(kPath)) {
+          const content = readFileSync(kPath, 'utf-8');
           knowledgeCount += (content.match(/^## /gm) || []).length || 1;
         }
       }
@@ -484,13 +487,14 @@ async function cmdAgent(agentType: string, task: string): Promise<void> {
 }
 
 function cmdLogs(): void {
-  if (!existsSync(LOG_FILE)) {
+  const logFile = logFilePath();
+  if (!existsSync(logFile)) {
     console.log(`  ${C.dim}No logs yet. Start the orchestrator with: galaxia start${C.reset}`);
     return;
   }
 
   try {
-    const content = readFileSync(LOG_FILE, 'utf-8');
+    const content = readFileSync(logFile, 'utf-8');
     const lines = content.trim().split('\n');
     const tail = lines.slice(-50);
     console.log('');
@@ -506,15 +510,16 @@ function cmdLogs(): void {
 }
 
 function cmdKnowledge(project?: string): void {
-  // Look for KNOWLEDGE.md files in data dir and project dirs
-  const knowledgeDir = join(DATA_DIR, 'knowledge');
+  // Look for KNOWLEDGE.md files under $dataDir/memory/projects/*/
+  const memoryProjects = join(knowledgeDir(), 'projects');
   const files: Array<{ name: string; path: string }> = [];
 
-  if (existsSync(knowledgeDir)) {
+  if (existsSync(memoryProjects)) {
     try {
-      for (const f of readdirSync(knowledgeDir)) {
-        if (f.endsWith('.md')) {
-          files.push({ name: f.replace('.md', ''), path: join(knowledgeDir, f) });
+      for (const projName of readdirSync(memoryProjects)) {
+        const kPath = join(memoryProjects, projName, 'KNOWLEDGE.md');
+        if (existsSync(kPath)) {
+          files.push({ name: projName, path: kPath });
         }
       }
     } catch { /* ignore */ }
@@ -634,9 +639,9 @@ function cmdStart(): void {
     const path = require('path');
     const { execSync } = require('child_process');
 
-    const LOG = '${LOG_FILE}';
-    const STATE = '${STATE_FILE}';
-    const MISSIONS = '${MISSIONS_FILE}';
+    const LOG = '${logFilePath()}';
+    const STATE = '${stateFilePath()}';
+    const MISSIONS = '${missionsFilePath()}';
 
     function log(msg) {
       const ts = new Date().toISOString();
@@ -693,7 +698,7 @@ function cmdStart(): void {
   child.unref();
 
   if (child.pid) {
-    writeFileSync(PID_FILE, String(child.pid), 'utf-8');
+    writeFileSync(pidFilePath(), String(child.pid), 'utf-8');
     appendLog(`[daemon] Started with PID ${child.pid}`);
     console.log('');
     console.log(`  ${C.green}${SYM.check} GALAXIA daemon started${C.reset} (PID: ${child.pid})`);
@@ -712,10 +717,11 @@ function cmdStop(): void {
   }
 
   const pid = readPid();
+  const pidFile = pidFilePath();
   try {
     process.kill(Number(pid), 'SIGTERM');
-    if (existsSync(PID_FILE)) {
-      writeFileSync(PID_FILE, '', 'utf-8');
+    if (existsSync(pidFile)) {
+      writeFileSync(pidFile, '', 'utf-8');
     }
     appendLog(`[daemon] Stopped (PID ${pid})`);
     console.log('');
@@ -724,7 +730,7 @@ function cmdStop(): void {
   } catch (err) {
     console.error(`  ${C.red}${SYM.cross} Failed to stop daemon: ${(err as Error).message}${C.reset}`);
     // Clean stale PID file
-    if (existsSync(PID_FILE)) writeFileSync(PID_FILE, '', 'utf-8');
+    if (existsSync(pidFile)) writeFileSync(pidFile, '', 'utf-8');
   }
 }
 
@@ -768,8 +774,9 @@ function cmdHelp(): void {
 // ── Daemon Helpers ─────────────────────────────────────────────────────────
 
 function readPid(): string {
-  if (!existsSync(PID_FILE)) return '';
-  return readFileSync(PID_FILE, 'utf-8').trim();
+  const pidFile = pidFilePath();
+  if (!existsSync(pidFile)) return '';
+  return readFileSync(pidFile, 'utf-8').trim();
 }
 
 function isDaemonRunning(): boolean {
@@ -786,8 +793,9 @@ function isDaemonRunning(): boolean {
 function appendLog(message: string): void {
   ensureDirs();
   const ts = new Date().toISOString();
+  const logFile = logFilePath();
   try {
-    writeFileSync(LOG_FILE, `${existsSync(LOG_FILE) ? readFileSync(LOG_FILE, 'utf-8') : ''}${ts} ${message}\n`, 'utf-8');
+    writeFileSync(logFile, `${existsSync(logFile) ? readFileSync(logFile, 'utf-8') : ''}${ts} ${message}\n`, 'utf-8');
   } catch { /* ignore */ }
 }
 
