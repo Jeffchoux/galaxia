@@ -12,6 +12,12 @@ export interface LLMProviderConfig {
   model: string;
   apiKey?: string;
   url?: string;
+  // Claude-only: pick the transport. 'cli' tries the local `claude` binary
+  // first (exploits a Claude Max subscription), then falls back to HTTP.
+  // 'http' skips the CLI entirely. Default when unset: 'cli'.
+  transport?: 'cli' | 'http';
+  // Claude CLI timeout in ms. Default 60_000. Ignored for HTTP.
+  timeoutMs?: number;
 }
 
 export interface Project {

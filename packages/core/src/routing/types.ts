@@ -78,6 +78,11 @@ export interface RoutingDecision {
   reason: string;            // human-readable single sentence
   fallbackTried: string[];   // provider names tried before success
   forbidFallback: boolean;   // final effective value after strictLocalOnly
+  // Claude-only: which transport actually served the request. 'cli' = local
+  // `claude` binary (Claude Max subscription), 'http' = api.anthropic.com
+  // (paid per token). null for non-Claude providers. Populated post-call by
+  // callLLM based on what callClaude returned.
+  transport?: 'cli' | 'http' | null;
 }
 
 export interface RoutingAuditEntry {
