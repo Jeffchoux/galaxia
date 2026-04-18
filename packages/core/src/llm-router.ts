@@ -129,6 +129,12 @@ const PROVIDER_FN: Record<string, ProviderFn> = {
 
 const FALLBACK_CHAIN: LLMTier[] = ['light', 'local', 'heavy'];
 
+/**
+ * @deprecated Use `callLLM(ctx, prompt, config)` instead. Kept for backward
+ * compatibility with external plugins and user scripts that predate the
+ * Pilier 4.bis context-aware router. All internal call-sites (orchestrator
+ * and BaseAgent) migrated in Phase 4.
+ */
 export async function callLLMByTier(
   tier: LLMTier,
   prompt: string,
