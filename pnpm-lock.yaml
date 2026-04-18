@@ -36,6 +36,9 @@ importers:
       '@galaxia/core':
         specifier: workspace:*
         version: link:../core
+      '@galaxia/telegram':
+        specifier: workspace:*
+        version: link:../telegram
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -72,6 +75,22 @@ importers:
 
   packages/plugins:
     dependencies:
+      '@galaxia/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/telegram:
+    dependencies:
+      '@galaxia/agents':
+        specifier: workspace:*
+        version: link:../agents
       '@galaxia/core':
         specifier: workspace:*
         version: link:../core

@@ -1,11 +1,10 @@
 {
-  "name": "@galaxia/cli",
+  "name": "@galaxia/telegram",
   "version": "0.1.0",
-  "description": "GALAXIA CLI — galaxia init/status/mission/agent",
+  "description": "GALAXIA bidirectional Telegram bot — long polling, command router, auth, inline confirmations (Pilier 3).",
   "type": "module",
-  "bin": {
-    "galaxia": "dist/cli.js"
-  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -13,8 +12,7 @@
   },
   "dependencies": {
     "@galaxia/core": "workspace:*",
-    "@galaxia/agents": "workspace:*",
-    "@galaxia/telegram": "workspace:*"
+    "@galaxia/agents": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

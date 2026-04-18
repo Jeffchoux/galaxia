@@ -39,6 +39,40 @@ notifications:
     enabled: false
     # webhook_url: xxx
 
+# ─── Telegram bidirectional bot (Pilier 3) ──────────────────────────────────
+# When enabled, Galaxia runs a long-polling Telegram bot in the daemon
+# process. Users whose chat_id matches `allowedChatIds` can drive Galaxia
+# from their phone: /status, /projects, /agent dev "…", free-text
+# conversation (routed via callLLM with dataClass='personal'), etc.
+# Strangers who message the bot get silent drop — we never reveal the
+# whitelist's contents.
+#
+# Actions listed under `requiresConfirmation` (e.g. dispatching an agent
+# that edits code, deleting a mission) show a two-button inline keyboard
+# "✅ Confirmer / ❌ Annuler" and wait up to 60s for approval before
+# executing. Timeout → the message is edited to "Expiré" and no action
+# runs.
+#
+# telegram:
+#   enabled: true
+#   botToken: ${TELEGRAM_BOT_TOKEN}      # load from .env
+#   allowedChatIds:
+#     - ${TELEGRAM_CHAT_ID}              # can list several
+#   pollingIntervalMs: 30000             # long-poll timeout
+#   requiresConfirmation:
+#     - dispatch-cicd
+#     - dispatch-dev
+#     - mission-delete
+#     - send-email
+#     - deploy-project
+
+# ─── Display / locale ───────────────────────────────────────────────────────
+# Affects only user-facing strings (Telegram replies, CLI timestamps).
+# Logs and audit trails stay in UTC ISO-8601 for reproducibility.
+#
+# display:
+#   timezone: UTC                        # IANA TZ, e.g. Europe/Paris, Indian/Reunion
+
 # ─── Contextual routing (Pilier 4.bis) ──────────────────────────────────────
 # Galaxia's core doctrine: you decide, data class by data class, task type by
 # task type, which model handles what. The framework enforces the decision,

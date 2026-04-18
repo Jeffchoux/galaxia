@@ -60,6 +60,23 @@ export interface GalaxiaConfig {
   // lives in ./routing/types.ts (RoutingConfig). Consumers that need typed
   // access import it directly from '@galaxia/core' (re-exported below).
   routing?: import('./routing/types.js').RoutingConfig;
+  // Pilier 3 — bidirectional Telegram control channel. Consumed by
+  // @galaxia/telegram (startTelegramBot). `notifications.telegram` above
+  // stays in place for one-way emit from the Core; this is the reception
+  // side with auth whitelist and confirmation flow.
+  telegram?: {
+    enabled: boolean;
+    botToken: string;                        // from .env via ${TELEGRAM_BOT_TOKEN}
+    allowedChatIds: (number | string)[];     // auth whitelist — silent refuse outside this set
+    pollingIntervalMs?: number;              // long-poll timeout, default 30_000
+    requiresConfirmation?: string[];         // action IDs that need inline-keyboard approval
+  };
+  // Presentation — affects only user-facing strings (Telegram replies, CLI
+  // displays). Internal logs (orchestrator.log, routing-audit.jsonl) stay
+  // UTC ISO-8601 for reproducibility.
+  display?: {
+    timezone?: string;                       // IANA TZ, e.g. 'Indian/Reunion'. Default 'UTC'.
+  };
 }
 
 export interface AgentAction {

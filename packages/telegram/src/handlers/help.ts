@@ -1,0 +1,26 @@
+// /help — lists every public command. Used as the default fallback when
+// the router sees an unknown /command as well.
+
+import type { CommandContext } from '../types.js';
+import { escapeMd2 } from '../format.js';
+
+const COMMANDS: Array<[string, string]> = [
+  ['/status',                         'État du daemon (running, uptime, cycles)'],
+  ['/projects',                       'Liste des projets avec leur santé'],
+  ['/project <name>',                 'Détail d\'un projet : status, knowledge, backlog'],
+  ['/agent <type> "<task>"',          'Dispatcher un agent (dev, review, veille, …)'],
+  ['/mission add "<desc>"',           'Ajouter une mission'],
+  ['/missions',                       'Lister les missions actives'],
+  ['/audit [N]',                      'Dernières N décisions de routage (défaut 10)'],
+  ['/logs [N]',                       'N dernières lignes du daemon (défaut 20)'],
+  ['/help',                           'Afficher cette aide'],
+  ['<texte libre>',                   'Conversation — envoyé au LLM avec dataClass=personal'],
+];
+
+export async function handleHelp(ctx: CommandContext): Promise<void> {
+  const lines = ['*Galaxia — commandes disponibles*', ''];
+  for (const [cmd, desc] of COMMANDS) {
+    lines.push(`• \`${cmd.replace(/`/g, '\\`')}\` — ${escapeMd2(desc)}`);
+  }
+  await ctx.client.sendMessage(ctx.chatId, lines.join('\n'), { parse_mode: 'MarkdownV2' });
+}

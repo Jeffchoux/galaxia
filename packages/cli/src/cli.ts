@@ -907,11 +907,36 @@ async function runDaemon(): Promise<void> {
 
   const interval = setInterval(() => { void runOnce(); }, intervalMs);
 
+  // Pilier 3 — Telegram bot runs in parallel with the cycle loop inside
+  // the same daemon process. Loaded dynamically so that users who don't
+  // build/install @galaxia/telegram still get a working daemon.
+  let telegramBot: { stop(): Promise<void> } | null = null;
+  if (config.telegram?.enabled && config.telegram?.botToken && config.telegram?.allowedChatIds?.length) {
+    import('@galaxia/telegram')
+      .then(async ({ startTelegramBot }) => {
+        try {
+          telegramBot = await startTelegramBot(config, {
+            log: (msg) => daemonLog(`[telegram] ${msg}`),
+          });
+        } catch (err) {
+          daemonLog(`[telegram] fatal: ${(err as Error).message}`);
+        }
+      })
+      .catch((err: Error) => {
+        daemonLog(`[telegram] import failed: ${err.message}`);
+      });
+  } else if (config.telegram?.enabled) {
+    daemonLog('[telegram] enabled in config but botToken or allowedChatIds missing — skipped');
+  }
+
   const shutdown = async (signal: string): Promise<void> => {
     if (stopping) return;
     stopping = true;
     daemonLog(`[daemon] stopping (${signal}) — waiting up to 30s for current cycle`);
     clearInterval(interval);
+    if (telegramBot) {
+      try { await telegramBot.stop(); } catch { /* noop */ }
+    }
     const deadline = Date.now() + 30_000;
     while (isRunning && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 200));
