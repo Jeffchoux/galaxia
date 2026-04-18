@@ -1,4 +1,11 @@
-import type { AgentType, LLMTier, KnowledgeEntry } from '@galaxia/core';
+import type {
+  AgentType,
+  LLMTier,
+  KnowledgeEntry,
+  DataClass,
+  TaskType,
+  RoutingContext,
+} from '@galaxia/core';
 import { callLLM } from '@galaxia/core';
 import type { AgentContext, AgentResult, AgentRole } from './types.js';
 
@@ -62,7 +69,35 @@ export abstract class BaseAgent implements AgentRole {
   abstract readonly description: string;
   abstract readonly tier: LLMTier;
 
+  /**
+   * Default data-class for this role's outputs. Used by `routingContext()` to
+   * tell the Pilier 4.bis routing engine what confidentiality bucket the
+   * prompt falls into. Each concrete role sets this (see docs/MANIFESTO.md
+   * § Pilier 4.bis for the taxonomy).
+   */
+  abstract readonly defaultDataClass: DataClass;
+
+  /**
+   * Default task-type for this role. Rules in `galaxia.yml` match on this to
+   * pick a provider (e.g. `taskType: creative-writing` → Claude).
+   */
+  abstract readonly defaultTaskType: TaskType;
+
   abstract getSystemPrompt(ctx: AgentContext): string;
+
+  /**
+   * Build the RoutingContext passed to `callLLM()`. Defaults to the role's
+   * declared data-class and task-type, scoped to the current project. Roles
+   * may override this to compute a context dynamically from the task string
+   * (e.g. detect "secret" data, switch to `strictLocalOnly`).
+   */
+  protected routingContext(_task: string, ctx: AgentContext): RoutingContext {
+    return {
+      dataClass: this.defaultDataClass,
+      taskType: this.defaultTaskType,
+      projectTag: ctx.project.name,
+    };
+  }
 
   /**
    * Build the full prompt by combining the system prompt with
@@ -106,8 +141,12 @@ export abstract class BaseAgent implements AgentRole {
   async run(task: string, ctx: AgentContext): Promise<AgentResult> {
     try {
       const prompt = this.buildPrompt(task, ctx);
-      const raw = await callLLM(this.tier, prompt, ctx.config);
-      const parsed = parseResponse(raw);
+      const { text } = await callLLM(
+        this.routingContext(task, ctx),
+        prompt,
+        ctx.config,
+      );
+      const parsed = parseResponse(text);
 
       return {
         success: parsed.errors.length === 0,
