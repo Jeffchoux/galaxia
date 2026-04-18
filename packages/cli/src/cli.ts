@@ -3,7 +3,7 @@
 // GALAXIA CLI — Your AI Company in a Box
 // Zero external dependencies — only Node.js built-ins + @galaxia/* workspace packages
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, openSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { execSync, spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
@@ -19,6 +19,8 @@ import {
   knowledgeDir,
   configSearchPaths,
   loadConfig,
+  updateState,
+  runCycle,
   queryAudit,
   type AuditQuery,
   type DataClass,
@@ -352,14 +354,60 @@ function cmdStatus(): void {
   console.log(`  ${C.bold}Knowledge:${C.reset} ${knowledgeCount} entries across ${Math.max(projectNames.length, 1)} project${projectNames.length !== 1 ? 's' : ''}`);
   console.log('');
 
-  // Daemon status
+  // Daemon status — Phase 5: show uptime, last cycle, cycle count, last decision.
   const daemonRunning = isDaemonRunning();
+  const daemonState = (state.daemon as Record<string, unknown> | undefined) || {};
   if (daemonRunning) {
-    console.log(`  ${C.green}${SYM.circle} Daemon running${C.reset} (PID: ${readPid()})`);
+    console.log(`  ${C.green}${SYM.circle} Galaxia daemon: RUNNING${C.reset} (PID: ${readPid()})`);
+    const startedAt = daemonState.startedAt as string | undefined;
+    if (startedAt) {
+      console.log(`    ${C.dim}Uptime:${C.reset}        ${formatUptime(startedAt)} ${C.dim}(since ${fmtLocalTime(startedAt)})${C.reset}`);
+    }
+    const lastCycle = daemonState.lastCycle as string | undefined;
+    const lastCycleMs = daemonState.lastCycleMs as number | undefined;
+    if (lastCycle) {
+      const ms = typeof lastCycleMs === 'number' ? ` ${C.dim}(${lastCycleMs}ms)${C.reset}` : '';
+      console.log(`    ${C.dim}Last cycle:${C.reset}    ${timeSince(lastCycle)}${ms}`);
+    } else {
+      console.log(`    ${C.dim}Last cycle:${C.reset}    ${C.dim}pending first cycle${C.reset}`);
+    }
+    const cycleCount = (daemonState.cycleCount as number | undefined) ?? 0;
+    console.log(`    ${C.dim}Cycles run:${C.reset}    ${cycleCount}`);
+    // Last routing decision from the audit log, if any.
+    try {
+      const configForAudit = loadConfig();
+      const last = queryAudit({ limit: 1 }, configForAudit)[0];
+      if (last) {
+        const transportLabel = last.decision.transport ? `/${last.decision.transport}` : '';
+        const okLabel = last.success ? `${C.green}ok${C.reset}` : `${C.red}fail${C.reset}`;
+        console.log(
+          `    ${C.dim}Last routing:${C.reset}  ${last.decision.provider}/${last.decision.model}${transportLabel} ` +
+          `${C.dim}(${last.context.taskType}, ${last.context.dataClass}, ${last.latencyMs}ms, ${okLabel}${C.dim})${C.reset}`,
+        );
+      }
+    } catch { /* audit unavailable — silent */ }
   } else {
-    console.log(`  ${C.dim}${SYM.circle} Daemon not running${C.reset}  ${C.dim}${SYM.rocket} galaxia start${C.reset}`);
+    console.log(`  ${C.dim}${SYM.circle} Galaxia daemon: STOPPED${C.reset}  ${C.dim}${SYM.rocket} galaxia start${C.reset}`);
+    const stoppedAt = daemonState.stoppedAt as string | undefined;
+    const lastCycle = daemonState.lastCycle as string | undefined;
+    if (stoppedAt) console.log(`    ${C.dim}Stopped:${C.reset}      ${timeSince(stoppedAt)}`);
+    if (lastCycle)  console.log(`    ${C.dim}Last cycle:${C.reset}   ${timeSince(lastCycle)}`);
   }
   console.log('');
+}
+
+function formatUptime(startIso: string): string {
+  const start = new Date(startIso).getTime();
+  const diff = Math.max(0, Date.now() - start);
+  const s = Math.floor(diff / 1000);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m ${sec}s`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
 }
 
 function colorMetric(value: string): string {
@@ -491,27 +539,131 @@ async function cmdAgent(agentType: string, task: string): Promise<void> {
   console.log('');
 }
 
-function cmdLogs(): void {
+function cmdLogs(args: string[] = []): void {
   const logFile = logFilePath();
   if (!existsSync(logFile)) {
     console.log(`  ${C.dim}No logs yet. Start the orchestrator with: galaxia start${C.reset}`);
     return;
   }
 
-  try {
-    const content = readFileSync(logFile, 'utf-8');
-    const lines = content.trim().split('\n');
-    const tail = lines.slice(-50);
-    console.log('');
-    console.log(`  ${C.bold}${C.cyan}GALAXIA Orchestrator Logs${C.reset}  ${C.dim}(last ${tail.length} lines)${C.reset}`);
-    console.log(`  ${C.dim}${line(50)}${C.reset}`);
-    for (const l of tail) {
-      console.log(`  ${l}`);
+  // Parse flags: --since <duration>, --grep <pattern>, --tail <N>.
+  let since: Date | null = null;
+  let grepPattern: RegExp | null = null;
+  let tailN: number | null = null;
+  let follow = true;
+  let showHelp = false;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--since' && args[i + 1]) {
+      const d = parseDurationToDate(args[++i]);
+      if (!d) {
+        console.error(`  ${C.red}${SYM.cross} Invalid --since value. Use 30s, 15m, 2h, 1d.${C.reset}`);
+        process.exit(1);
+      }
+      since = d;
+    } else if (a === '--grep' && args[i + 1]) {
+      try {
+        grepPattern = new RegExp(args[++i]);
+      } catch (err) {
+        console.error(`  ${C.red}${SYM.cross} Invalid --grep regex: ${(err as Error).message}${C.reset}`);
+        process.exit(1);
+      }
+    } else if (a === '--tail' && args[i + 1]) {
+      tailN = parseInt(args[++i], 10);
+      if (isNaN(tailN) || tailN <= 0) {
+        console.error(`  ${C.red}${SYM.cross} --tail requires a positive integer.${C.reset}`);
+        process.exit(1);
+      }
+      follow = false;
+    } else if (a === '--no-follow' || a === '-n') {
+      follow = false;
+    } else if (a === '--help' || a === '-h') {
+      showHelp = true;
     }
-    console.log('');
+  }
+
+  if (showHelp) {
+    console.log('Usage: galaxia logs [--since 30m] [--grep PATTERN] [--tail N] [--no-follow]');
+    return;
+  }
+
+  let content: string;
+  try {
+    content = readFileSync(logFile, 'utf-8');
   } catch (err) {
     console.error(`  ${C.red}${SYM.cross} Failed to read logs: ${(err as Error).message}${C.reset}`);
+    return;
   }
+
+  let lines = content.length > 0 ? content.split('\n').filter((l) => l.length > 0) : [];
+
+  if (since) {
+    const sinceMs = since.getTime();
+    lines = lines.filter((l) => {
+      const t = parseLogTimestamp(l);
+      return t === null ? true : t >= sinceMs;
+    });
+  }
+  if (grepPattern) {
+    lines = lines.filter((l) => grepPattern!.test(l));
+  }
+
+  const defaultShow = 50;
+  const sliceN = tailN ?? defaultShow;
+  const shown = lines.slice(-sliceN);
+
+  console.log('');
+  const desc: string[] = [`last ${shown.length} lines`];
+  if (since) desc.push(`since ${since.toISOString()}`);
+  if (grepPattern) desc.push(`grep /${grepPattern.source}/`);
+  console.log(`  ${C.bold}${C.cyan}GALAXIA Orchestrator Logs${C.reset}  ${C.dim}(${desc.join(', ')})${C.reset}`);
+  console.log(`  ${C.dim}${line(50)}${C.reset}`);
+  for (const l of shown) console.log(`  ${l}`);
+  console.log('');
+
+  if (!follow) return;
+
+  // Follow mode: spawn `tail -F` and stream to stdout with the same grep
+  // filter applied. Exit on Ctrl-C.
+  console.log(`  ${C.dim}Following ${logFile} — Ctrl-C to stop${C.reset}`);
+  const tailArgs = ['-n', '0', '-F', logFile];
+  const child = spawn('tail', tailArgs, { stdio: ['ignore', 'pipe', 'inherit'] });
+  let buffer = '';
+  child.stdout?.on('data', (chunk: Buffer) => {
+    buffer += chunk.toString('utf8');
+    let idx;
+    while ((idx = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 1);
+      if (line.length === 0) continue;
+      if (grepPattern && !grepPattern.test(line)) continue;
+      if (since) {
+        const t = parseLogTimestamp(line);
+        if (t !== null && t < since.getTime()) continue;
+      }
+      process.stdout.write(`  ${line}\n`);
+    }
+  });
+  child.on('exit', (code: number | null) => { process.exit(code ?? 0); });
+  process.on('SIGINT', () => { child.kill('SIGTERM'); });
+}
+
+// Parse the timestamp prefix written by daemonLog: "[YYYY-MM-DD HH:MM:SS]".
+// Also tolerates ISO-8601 timestamps written by appendLog. Returns ms since
+// epoch, or null if the line has no parseable prefix (kept in output by
+// default — `since` filtering can't judge unprefixed lines).
+function parseLogTimestamp(line: string): number | null {
+  const bracket = /^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]/.exec(line);
+  if (bracket) {
+    const d = new Date(bracket[1].replace(' ', 'T'));
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+  const iso = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)/.exec(line);
+  if (iso) {
+    const d = new Date(iso[1]);
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+  return null;
 }
 
 function cmdKnowledge(project?: string): void {
@@ -638,72 +790,33 @@ function cmdStart(): void {
 
   ensureDirs();
 
-  // Spawn a detached background process that runs the orchestrator loop
-  const daemonScript = `
-    const fs = require('fs');
-    const path = require('path');
-    const { execSync } = require('child_process');
+  // The daemon loop lives in this same file (see runDaemon() below) and is
+  // dispatched by the hidden '__daemon' subcommand in main(). We re-spawn the
+  // current CLI binary detached so the daemon can import runCycle/loadConfig
+  // from @galaxia/core via the same module graph as the foreground CLI.
+  const selfScript = process.argv[1];
+  const logFile = logFilePath();
+  const nodeBin = process.execPath;
 
-    const LOG = '${logFilePath()}';
-    const STATE = '${stateFilePath()}';
-    const MISSIONS = '${missionsFilePath()}';
+  // Open the log file for append so the child's stdout/stderr land there.
+  const logFd = openSync(logFile, 'a');
 
-    function log(msg) {
-      const ts = new Date().toISOString();
-      fs.appendFileSync(LOG, ts + ' ' + msg + '\\n');
-    }
-
-    function getMetrics() {
-      try {
-        const cpu = execSync("top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}' 2>/dev/null || echo '0'", { encoding: 'utf-8' }).trim();
-        const ram = execSync("free | awk '/Mem:/ {printf \\"%%.0f\\", $3/$2*100}' 2>/dev/null || echo '0'", { encoding: 'utf-8' }).trim();
-        const disk = execSync("df / | awk 'NR==2 {gsub(/%/,\\"\\"); print $5}' 2>/dev/null || echo '0'", { encoding: 'utf-8' }).trim();
-        return { cpu: cpu + '%', ram: ram + '%', disk: disk + '%' };
-      } catch { return { cpu: '?%', ram: '?%', disk: '?%' }; }
-    }
-
-    log('[daemon] Started');
-
-    const interval = setInterval(() => {
-      const metrics = getMetrics();
-      log('[cycle] CPU=' + metrics.cpu + ' RAM=' + metrics.ram + ' Disk=' + metrics.disk);
-
-      // Update state file
-      try {
-        let state = {};
-        if (fs.existsSync(STATE)) {
-          state = JSON.parse(fs.readFileSync(STATE, 'utf-8'));
-        }
-        state.system = { ...metrics, pm2Online: '0/0' };
-        state.lastUpdated = new Date().toISOString();
-        fs.writeFileSync(STATE, JSON.stringify(state, null, 2));
-      } catch (e) {
-        log('[daemon] State update error: ' + e.message);
-      }
-    }, 3600 * 1000); // Default: 1 hour
-
-    // Keep alive
-    process.on('SIGTERM', () => {
-      log('[daemon] Stopped (SIGTERM)');
-      clearInterval(interval);
-      process.exit(0);
-    });
-    process.on('SIGINT', () => {
-      log('[daemon] Stopped (SIGINT)');
-      clearInterval(interval);
-      process.exit(0);
-    });
-  `;
-
-  const child: ChildProcess = spawn('node', ['-e', daemonScript], {
+  const child: ChildProcess = spawn(nodeBin, [selfScript, '__daemon'], {
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', logFd, logFd],
+    env: { ...process.env },
   });
 
   child.unref();
 
   if (child.pid) {
     writeFileSync(pidFilePath(), String(child.pid), 'utf-8');
+    // Record daemon start — used by cmdStatus for uptime.
+    try {
+      updateState('daemon.startedAt', new Date().toISOString(), resolveDataDir());
+      updateState('daemon.pid', child.pid, resolveDataDir());
+      updateState('daemon.cycleCount', 0, resolveDataDir());
+    } catch { /* state write failures are non-fatal for start */ }
     appendLog(`[daemon] Started with PID ${child.pid}`);
     console.log('');
     console.log(`  ${C.green}${SYM.check} GALAXIA daemon started${C.reset} (PID: ${child.pid})`);
@@ -715,28 +828,181 @@ function cmdStart(): void {
   }
 }
 
+// Hidden subcommand. Runs in the detached child process spawned by cmdStart.
+// Executes runCycle() immediately, then on a setInterval driven by
+// config.agents.cycleInterval. Guarded against overlap: if a cycle is still
+// running when the next tick fires, the tick is skipped and logged.
+async function runDaemon(): Promise<void> {
+  const dataDir = resolveDataDir();
+  const pidFile = pidFilePath(dataDir);
+
+  // Ensure our PID reflects reality even if cmdStart raced us. (cmdStart
+  // writes the PID before we boot; we refresh in case of a manual restart.)
+  try { writeFileSync(pidFile, String(process.pid), 'utf-8'); } catch { /* noop */ }
+
+  let config;
+  try {
+    config = loadConfig();
+  } catch (err) {
+    daemonLog(`[daemon] FATAL: failed to load config: ${(err as Error).message}`);
+    process.exit(1);
+  }
+
+  const minIntervalSec = 60;
+  const defaultIntervalSec = 3600;
+  const requested = config.agents?.cycleInterval ?? defaultIntervalSec;
+  // Env override, used by the Phase 5 smoke tests to exercise the overlap
+  // guard with sub-minute ticks. Not documented in the user help on purpose.
+  const envOverride = Number(process.env.GALAXIA_DAEMON_INTERVAL_SEC);
+  const intervalSec = Number.isFinite(envOverride) && envOverride > 0
+    ? envOverride
+    : Math.max(minIntervalSec, requested);
+  const intervalMs = intervalSec * 1000;
+
+  daemonLog(`[daemon] Boot pid=${process.pid} interval=${intervalSec}s dataDir=${dataDir}`);
+  if (!Number.isFinite(envOverride) && requested < minIntervalSec) {
+    daemonLog(`[daemon] cycleInterval ${requested}s below minimum, clamped to ${minIntervalSec}s`);
+  }
+
+  let isRunning = false;
+  let stopping = false;
+  let cycleCount = 0;
+
+  // Test-only: stall each cycle by N ms before running it. Used by the
+  // Phase 5 overlap smoke test to force a cycle to outlive the next tick.
+  const stallMs = Number(process.env.GALAXIA_DAEMON_TEST_STALL_MS) || 0;
+
+  const runOnce = async (): Promise<void> => {
+    if (isRunning) {
+      daemonLog('[daemon] cycle skipped: previous still running');
+      return;
+    }
+    if (stopping) return;
+    isRunning = true;
+    const start = Date.now();
+    try {
+      if (stallMs > 0) {
+        await new Promise((r) => setTimeout(r, stallMs));
+      }
+      const report = await runCycle(config);
+      cycleCount += 1;
+      try {
+        updateState('daemon.cycleCount', cycleCount, dataDir);
+        updateState('daemon.lastCycle', report.timestamp, dataDir);
+        updateState('daemon.lastCycleMs', report.duration, dataDir);
+      } catch (stateErr) {
+        daemonLog(`[daemon] state update failed: ${(stateErr as Error).message}`);
+      }
+      const actions = report.projects.reduce((sum, p) => sum + p.actionsDispatched, 0);
+      daemonLog(`[daemon] cycle completed #${cycleCount} in ${report.duration}ms, ${report.projects.length} projects, ${actions} actions`);
+    } catch (err) {
+      daemonLog(`[daemon] cycle FAILED after ${Date.now() - start}ms: ${(err as Error).message}`);
+    } finally {
+      isRunning = false;
+    }
+  };
+
+  // Kick off the first cycle immediately (don't wait for the first tick).
+  void runOnce();
+
+  const interval = setInterval(() => { void runOnce(); }, intervalMs);
+
+  const shutdown = async (signal: string): Promise<void> => {
+    if (stopping) return;
+    stopping = true;
+    daemonLog(`[daemon] stopping (${signal}) — waiting up to 30s for current cycle`);
+    clearInterval(interval);
+    const deadline = Date.now() + 30_000;
+    while (isRunning && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    if (isRunning) {
+      daemonLog('[daemon] timeout reached; exiting with cycle still in-flight');
+    } else {
+      daemonLog('[daemon] clean shutdown');
+    }
+    try { if (existsSync(pidFile)) unlinkSync(pidFile); } catch { /* noop */ }
+    try { updateState('daemon.stoppedAt', new Date().toISOString(), dataDir); } catch { /* noop */ }
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
+  process.on('SIGINT',  () => { void shutdown('SIGINT'); });
+  process.on('uncaughtException', (err: Error) => {
+    daemonLog(`[daemon] uncaughtException: ${err.stack || err.message}`);
+  });
+  process.on('unhandledRejection', (reason: unknown) => {
+    const msg = reason instanceof Error ? (reason.stack || reason.message) : String(reason);
+    daemonLog(`[daemon] unhandledRejection: ${msg}`);
+  });
+}
+
+function daemonLog(message: string): void {
+  // Timestamped single-line log: "[YYYY-MM-DD HH:MM:SS] message".
+  // Writes to stdout so our parent's logFd captures it into orchestrator.log.
+  const d = new Date();
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  const ts =
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  process.stdout.write(`[${ts}] ${message}\n`);
+}
+
 function cmdStop(): void {
+  const pidFile = pidFilePath();
+
   if (!isDaemonRunning()) {
-    console.log(`  ${C.dim}Daemon is not running.${C.reset}`);
+    const stalePid = readPid();
+    if (stalePid && existsSync(pidFile)) {
+      try { unlinkSync(pidFile); } catch { /* noop */ }
+      console.log(`  ${C.dim}Removed stale PID file (pid ${stalePid} was not alive).${C.reset}`);
+    } else {
+      console.log(`  ${C.dim}Daemon is not running.${C.reset}`);
+    }
     return;
   }
 
-  const pid = readPid();
-  const pidFile = pidFilePath();
+  const pid = Number(readPid());
   try {
-    process.kill(Number(pid), 'SIGTERM');
-    if (existsSync(pidFile)) {
-      writeFileSync(pidFile, '', 'utf-8');
-    }
-    appendLog(`[daemon] Stopped (PID ${pid})`);
-    console.log('');
-    console.log(`  ${C.green}${SYM.check} GALAXIA daemon stopped${C.reset} (PID: ${pid})`);
-    console.log('');
+    process.kill(pid, 'SIGTERM');
   } catch (err) {
-    console.error(`  ${C.red}${SYM.cross} Failed to stop daemon: ${(err as Error).message}${C.reset}`);
-    // Clean stale PID file
-    if (existsSync(pidFile)) writeFileSync(pidFile, '', 'utf-8');
+    console.error(`  ${C.red}${SYM.cross} Failed to signal daemon: ${(err as Error).message}${C.reset}`);
+    if (existsSync(pidFile)) {
+      try { unlinkSync(pidFile); } catch { /* noop */ }
+    }
+    return;
   }
+
+  // Poll up to 30s for graceful death, then SIGKILL.
+  const deadline = Date.now() + 30_000;
+  const pollMs = 200;
+  const waitUntilDead = (): void => {
+    while (Date.now() < deadline) {
+      try {
+        process.kill(pid, 0); // throws if dead
+      } catch {
+        return; // dead
+      }
+      execSync(`sleep ${pollMs / 1000}`);
+    }
+  };
+  waitUntilDead();
+
+  let stillAlive = false;
+  try { process.kill(pid, 0); stillAlive = true; } catch { /* dead */ }
+
+  if (stillAlive) {
+    console.log(`  ${C.yellow}${SYM.warn} Daemon did not exit within 30s, sending SIGKILL${C.reset}`);
+    try { process.kill(pid, 'SIGKILL'); } catch { /* noop */ }
+  }
+
+  if (existsSync(pidFile)) {
+    try { unlinkSync(pidFile); } catch { /* noop */ }
+  }
+  appendLog(`[daemon] Stopped (PID ${pid})`);
+  console.log('');
+  console.log(`  ${C.green}${SYM.check} GALAXIA daemon stopped${C.reset} (PID: ${pid})`);
+  console.log('');
 }
 
 function cmdVersion(): void {
@@ -955,7 +1221,7 @@ async function main(): Promise<void> {
     }
 
     case 'logs':
-      cmdLogs();
+      cmdLogs(args.slice(1));
       break;
 
     case 'knowledge':
@@ -983,6 +1249,11 @@ async function main(): Promise<void> {
 
     case 'stop':
       cmdStop();
+      break;
+
+    // Hidden entry used by cmdStart's detached child. Not documented in help.
+    case '__daemon':
+      await runDaemon();
       break;
 
     case 'version':
