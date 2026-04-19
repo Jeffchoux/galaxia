@@ -73,6 +73,34 @@ export {
   validateRules,
 } from './routing/index.js';
 
+// General Manager (Phase 10)
+export type {
+  GMConfig,
+  GMObjective,
+  GMState,
+  GMAction,
+  GMDecision,
+  ProjectGMOptions,
+  GMLoopHandle,
+} from './gm/index.js';
+export {
+  defaultGMState,
+  GM_DEFAULT_INTERVAL_MIN,
+  GM_MIN_INTERVAL_MIN,
+  GM_RECENT_ACTIONS_CAP,
+  ProjectGM,
+  runGMLoop,
+  gmDir,
+  gmStatePath,
+  gmJournalPath,
+  loadGMState,
+  saveGMState,
+  appendJournal,
+  tailJournal,
+  decideNext,
+  parseGMDecision,
+} from './gm/index.js';
+
 // Action Runner (Phase 9)
 export type {
   ActionKind,

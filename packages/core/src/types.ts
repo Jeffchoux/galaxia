@@ -32,6 +32,10 @@ export interface Project {
   allowedShellCommands?: string[];
   allowedHttpDomains?: string[];
   pm2Allowed?: string[];
+  // Phase 10 — per-project General Manager config. When `gm.enabled`,
+  // the daemon starts a review loop for this project. See
+  // packages/core/src/gm/types.ts.
+  gm?: import('./gm/types.js').GMConfig;
 }
 
 // Multi-user support — introduced in Phase 7. Each entry describes one

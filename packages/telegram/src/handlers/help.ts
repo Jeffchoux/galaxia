@@ -10,6 +10,8 @@ const COMMANDS: Array<[string, string]> = [
   ['/project <name>',                 'Détail d\'un projet : status, knowledge, backlog'],
   ['/agent <type> "<task>"',          'Dispatcher un agent (dev, review, veille, …)'],
   ['/plan <type> "<task>"',           'Planifier une action (dry-run + confirmation avant apply)'],
+  ['/objective <project> "<text>"',   'Ajouter un objectif au GM d\'un projet'],
+  ['/gm <project> [pause|resume]',    'Voir / piloter le GM d\'un projet'],
   ['/mission add "<desc>"',           'Ajouter une mission'],
   ['/missions',                       'Lister les missions actives'],
   ['/audit [N]',                      'Dernières N décisions de routage (défaut 10)'],
