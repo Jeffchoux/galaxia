@@ -934,6 +934,25 @@ async function runDaemon(): Promise<void> {
     daemonLog('[telegram] enabled in config but botToken missing or no telegram identities — skipped');
   }
 
+  // Phase 10 — per-project General Manager loops. One loop per project
+  // that has `gm.enabled: true` in galaxia.yml. Loops run independently
+  // of the main cycle so a slow LLM call on one GM doesn't block the
+  // overall heartbeat.
+  const gmHandles: Array<{ project: string; stop(): void }> = [];
+  {
+    const { runGMLoop } = await import('@galaxia/core');
+    for (const project of config.projects) {
+      if (!project.gm?.enabled) continue;
+      const handle = runGMLoop(project, project.gm, config, {}, (msg) => daemonLog(`[gm:${project.name}] ${msg}`));
+      if (handle) gmHandles.push(handle);
+    }
+    if (gmHandles.length > 0) {
+      daemonLog(`[gm] ${gmHandles.length} loop(s) started: ${gmHandles.map((h) => h.project).join(', ')}`);
+    } else {
+      daemonLog('[gm] no project has gm.enabled — no loops started');
+    }
+  }
+
   const shutdown = async (signal: string): Promise<void> => {
     if (stopping) return;
     stopping = true;
@@ -941,6 +960,9 @@ async function runDaemon(): Promise<void> {
     clearInterval(interval);
     if (telegramBot) {
       try { await telegramBot.stop(); } catch { /* noop */ }
+    }
+    for (const h of gmHandles) {
+      try { h.stop(); } catch { /* noop */ }
     }
     const deadline = Date.now() + 30_000;
     while (isRunning && Date.now() < deadline) {

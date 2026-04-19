@@ -26,6 +26,8 @@ import { handleFreetext } from './handlers/freetext.js';
 import { handleWhoami } from './handlers/whoami.js';
 import { makeDiscoverHandler } from './handlers/discover.js';
 import { makePlanHandler } from './handlers/plan.js';
+import { handleObjective } from './handlers/objective.js';
+import { handleGm } from './handlers/gm.js';
 import type { DiscoveryStore } from './discovery.js';
 
 export class Router {
@@ -47,6 +49,8 @@ export class Router {
     this.handlers.set('/logs',     handleLogs);
     this.handlers.set('/help',     handleHelp);
     this.handlers.set('/whoami',   handleWhoami);
+    this.handlers.set('/objective', handleObjective);
+    this.handlers.set('/gm',        handleGm);
     if (discovery) {
       this.handlers.set('/discover', makeDiscoverHandler(discovery));
     }
