@@ -24,11 +24,16 @@ import { handleLogs } from './handlers/logs.js';
 import { handleHelp } from './handlers/help.js';
 import { handleFreetext } from './handlers/freetext.js';
 import { handleWhoami } from './handlers/whoami.js';
+import { makeDiscoverHandler } from './handlers/discover.js';
+import type { DiscoveryStore } from './discovery.js';
 
 export class Router {
   private readonly handlers: Map<string, (ctx: CommandContext) => Promise<void>>;
 
-  constructor(private readonly store: ConfirmationStore) {
+  constructor(
+    private readonly store: ConfirmationStore,
+    discovery?: DiscoveryStore,
+  ) {
     this.handlers = new Map();
     this.handlers.set('/status',   handleStatus);
     this.handlers.set('/projects', handleProjects);
@@ -40,6 +45,9 @@ export class Router {
     this.handlers.set('/logs',     handleLogs);
     this.handlers.set('/help',     handleHelp);
     this.handlers.set('/whoami',   handleWhoami);
+    if (discovery) {
+      this.handlers.set('/discover', makeDiscoverHandler(discovery));
+    }
     // /start is the Telegram "first contact" convention — route to /help.
     this.handlers.set('/start',    handleHelp);
   }

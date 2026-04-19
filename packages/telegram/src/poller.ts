@@ -9,6 +9,7 @@ import type { GalaxiaConfig } from '@galaxia/core';
 import type { TelegramClient } from './client.js';
 import type { Router } from './router.js';
 import type { ConfirmationStore } from './confirmation.js';
+import type { DiscoveryStore } from './discovery.js';
 import type { TelegramUpdate } from './types.js';
 import { findUser } from './auth.js';
 
@@ -19,6 +20,7 @@ export interface PollerOptions {
   client: TelegramClient;
   router: Router;
   confirmations: ConfirmationStore;
+  discovery?: DiscoveryStore;
   config: GalaxiaConfig;
   log?: (msg: string) => void;
 }
@@ -92,6 +94,11 @@ export class Poller {
         // unauthorised callback — it doesn't reveal whitelist membership
         // because ANY stranger gets the same no-op close.
         try { await client.answerCallbackQuery(q.id); } catch { /* noop */ }
+        return;
+      }
+      // Phase 8.5: discovery callbacks own the `dr:` namespace.
+      if (this.opts.discovery && this.opts.discovery.isOwnData(q.data ?? '')) {
+        await this.opts.discovery.handleCallback(q, config, client);
         return;
       }
       await confirmations.handleCallback(q, config, client);

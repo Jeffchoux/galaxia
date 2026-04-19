@@ -10,6 +10,7 @@ import type { GalaxiaConfig } from '@galaxia/core';
 import { TelegramClient } from './client.js';
 import { Router } from './router.js';
 import { ConfirmationStore } from './confirmation.js';
+import { DiscoveryStore } from './discovery.js';
 import { Poller } from './poller.js';
 import type { TelegramBotHandle } from './types.js';
 
@@ -57,8 +58,11 @@ export async function startTelegramBot(
   const confirmations = new ConfirmationStore(options.confirmationTtlMs);
   confirmations.startSweeper(client);
 
-  const router = new Router(confirmations);
-  const poller = new Poller({ client, router, confirmations, config, log });
+  const discovery = new DiscoveryStore();
+  discovery.startSweeper(client);
+
+  const router = new Router(confirmations, discovery);
+  const poller = new Poller({ client, router, confirmations, discovery, config, log });
   poller.start();
   const users = config.users ?? [];
   const summary = users.length > 0
@@ -71,6 +75,7 @@ export async function startTelegramBot(
       log('stopping bot…');
       await poller.stop();
       confirmations.stop();
+      discovery.stop();
       log('bot stopped');
     },
   };
