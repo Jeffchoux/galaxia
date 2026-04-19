@@ -158,9 +158,13 @@ async function dispatchAction(
 
   try {
     // Avoid a hard dependency on @galaxia/agents in core's package.json
-    // (would create a build cycle). Dynamic import returns unknown at
-    // type-check level; cast to the minimal runtime shape we use.
-    const mod = (await import('@galaxia/agents' as string)) as {
+    // (would create a build cycle). In the pnpm workspace, core's own
+    // node_modules doesn't contain @galaxia/agents, so a bare
+    // `import('@galaxia/agents')` fails with MODULE_NOT_FOUND. Resolve
+    // to the known on-disk location instead — monorepo-specific, but
+    // the cli host is always the same layout at runtime.
+    const agentsModulePath = new URL('../../agents/dist/index.js', import.meta.url).href;
+    const mod = (await import(agentsModulePath)) as {
       getAgent: (type: string) => { run: (task: string, ctx: unknown) => Promise<{ success: boolean; summary: string; plan?: unknown[] }> };
     };
     const agent = mod.getAgent(action.type);
