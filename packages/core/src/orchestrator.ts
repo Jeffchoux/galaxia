@@ -136,13 +136,40 @@ async function triageProject(
 }
 
 // ── Phase 3: Dispatch Agents ─────────────────────────────────
+//
+// Phase 9 — the legacy bash dispatch (`bash /opt/agents/<type>/run.sh ...`)
+// is dead since Phase 0 removed the scripts. We now dispatch to the TS
+// agents via @galaxia/agents.getAgent(). Imported dynamically to keep
+// @galaxia/core free of a hard dependency on @galaxia/agents (avoids a
+// cycle: agents → core types, core → agents registry).
 
-async function dispatchAction(action: AgentAction, projectName: string): Promise<void> {
-  const scriptPath = `/opt/agents/${action.type}/run.sh`;
+async function dispatchAction(
+  action: AgentAction,
+  projectName: string,
+  config: GalaxiaConfig,
+): Promise<void> {
   console.error(`[orchestrator] Dispatching ${action.type} for ${projectName}: ${action.task}`);
 
+  const project = config.projects.find((p) => p.name === projectName);
+  if (!project) {
+    console.error(`[orchestrator] Unknown project "${projectName}" — skipping dispatch`);
+    return;
+  }
+
   try {
-    shellExec(`bash ${scriptPath} ${JSON.stringify(action.task)}`);
+    // Avoid a hard dependency on @galaxia/agents in core's package.json
+    // (would create a build cycle). Dynamic import returns unknown at
+    // type-check level; cast to the minimal runtime shape we use.
+    const mod = (await import('@galaxia/agents' as string)) as {
+      getAgent: (type: string) => { run: (task: string, ctx: unknown) => Promise<{ success: boolean; summary: string; plan?: unknown[] }> };
+    };
+    const agent = mod.getAgent(action.type);
+    const result = await agent.run(action.task, { project, config, dataDir: config.dataDir });
+    const planCount = result.plan?.length ?? 0;
+    const extra = planCount > 0 ? ` (plan:${planCount})` : '';
+    console.error(`[orchestrator] ${action.type} for ${projectName} ${result.success ? 'ok' : 'failed'}${extra}: ${result.summary.slice(0, 120)}`);
+    // Note: we do NOT execute the plan here. Phase 9 surface is /plan
+    // on Telegram (dry-run → confirm → apply). Cycles stay read-only.
   } catch (err) {
     console.error(`[orchestrator] Agent ${action.type} failed:`, (err as Error).message);
   }
@@ -194,7 +221,7 @@ export async function runCycle(config: GalaxiaConfig): Promise<CycleReport> {
       const sorted = [...triage.actions].sort((a, b) => a.priority - b.priority);
       for (const action of sorted) {
         if (config.agents.enabled.includes(action.type)) {
-          await dispatchAction(action, project.name);
+          await dispatchAction(action, project.name, config);
           dispatched++;
         }
       }

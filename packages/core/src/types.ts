@@ -26,6 +26,12 @@ export interface Project {
   pm2Name?: string;
   port?: number;
   description?: string;
+  // Phase 9 — per-project action runner permissions. Empty / missing =
+  // the agent can't do anything dynamic in this project. See
+  // packages/core/src/action-runner/types.ts for the rules.
+  allowedShellCommands?: string[];
+  allowedHttpDomains?: string[];
+  pm2Allowed?: string[];
 }
 
 // Multi-user support — introduced in Phase 7. Each entry describes one
@@ -60,6 +66,8 @@ export interface GalaxiaConfig {
   // shortcut.
   owner?: string;
   users?: GalaxiaUser[];
+  // Phase 9 — action runner configuration (dry-run default, gated kinds).
+  actionRunner?: import('./action-runner/types.js').ActionRunnerConfig;
   llm: {
     light: LLMProviderConfig;
     medium: LLMProviderConfig;

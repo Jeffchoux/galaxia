@@ -25,6 +25,7 @@ import { handleHelp } from './handlers/help.js';
 import { handleFreetext } from './handlers/freetext.js';
 import { handleWhoami } from './handlers/whoami.js';
 import { makeDiscoverHandler } from './handlers/discover.js';
+import { makePlanHandler } from './handlers/plan.js';
 import type { DiscoveryStore } from './discovery.js';
 
 export class Router {
@@ -39,6 +40,7 @@ export class Router {
     this.handlers.set('/projects', handleProjects);
     this.handlers.set('/project',  handleProject);
     this.handlers.set('/agent',    makeAgentHandler(store));
+    this.handlers.set('/plan',     makePlanHandler(store));
     this.handlers.set('/mission',  makeMissionHandler(store));
     this.handlers.set('/missions', handleMissions);
     this.handlers.set('/audit',    handleAudit);

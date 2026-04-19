@@ -9,6 +9,7 @@ const COMMANDS: Array<[string, string]> = [
   ['/projects',                       'Liste des projets avec leur santé'],
   ['/project <name>',                 'Détail d\'un projet : status, knowledge, backlog'],
   ['/agent <type> "<task>"',          'Dispatcher un agent (dev, review, veille, …)'],
+  ['/plan <type> "<task>"',           'Planifier une action (dry-run + confirmation avant apply)'],
   ['/mission add "<desc>"',           'Ajouter une mission'],
   ['/missions',                       'Lister les missions actives'],
   ['/audit [N]',                      'Dernières N décisions de routage (défaut 10)'],
