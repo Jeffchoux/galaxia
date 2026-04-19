@@ -144,7 +144,9 @@ export class ProjectGM {
 /** Default dispatcher — dynamic import via the monorepo layout,
  * identical technique to orchestrator.dispatchAction. */
 const defaultAgentRunner: AgentRunner = async (agent, task, project, config) => {
-  const url = new URL('../../agents/dist/index.js', import.meta.url).href;
+  // gm/manager.js at /opt/galaxia/packages/core/dist/gm/manager.js —
+  // three `../` hops reach `packages/`.
+  const url = new URL('../../../agents/dist/index.js', import.meta.url).href;
   const mod = (await import(url)) as {
     getAgent: (t: string) => { run: (task: string, ctx: unknown) => Promise<{ success: boolean; summary: string }> };
   };
