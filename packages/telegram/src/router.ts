@@ -28,6 +28,7 @@ import { makeDiscoverHandler } from './handlers/discover.js';
 import { makePlanHandler } from './handlers/plan.js';
 import { handleObjective } from './handlers/objective.js';
 import { handleGm } from './handlers/gm.js';
+import { handleWorldseed } from './handlers/worldseed.js';
 import type { DiscoveryStore } from './discovery.js';
 
 export class Router {
@@ -51,6 +52,7 @@ export class Router {
     this.handlers.set('/whoami',   handleWhoami);
     this.handlers.set('/objective', handleObjective);
     this.handlers.set('/gm',        handleGm);
+    this.handlers.set('/worldseed', handleWorldseed);
     if (discovery) {
       this.handlers.set('/discover', makeDiscoverHandler(discovery));
     }

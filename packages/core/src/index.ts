@@ -73,6 +73,24 @@ export {
   validateRules,
 } from './routing/index.js';
 
+// Worldseed AGI adapter (Phase 11)
+export type {
+  WorldseedCapability,
+  WorldseedRequest,
+  WorldseedResponse,
+  AskOptions as WorldseedAskOptions,
+  ConsultOptions as WorldseedConsultOptions,
+  ConsultResult as WorldseedConsultResult,
+} from './worldseed/index.js';
+export {
+  WORLDSEED_REQUEST_FILE,
+  WORLDSEED_RESPONSE_FILE,
+  WORLDSEED_DEFAULT_TIMEOUT_MS,
+  askWorldseed,
+  consultWorldseed,
+  WorldseedUnavailableError,
+} from './worldseed/index.js';
+
 // General Manager (Phase 10)
 export type {
   GMConfig,
