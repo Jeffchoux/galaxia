@@ -28,7 +28,7 @@ import {
 } from './auth.js';
 import {
   handleGetState, handleGetProjects, handleGetAudit,
-  handleGetMissions, handleGetUsers, handleGetMe,
+  handleGetMissions, handleGetUsers, handleGetMe, handleGetBrain,
   writeJSON, type RouteContext,
 } from './routes.js';
 
@@ -179,6 +179,7 @@ export function startDashboard(options: StartDashboardOptions | number = {}, leg
       if (urlPath === '/api/audit'     && req.method === 'GET')  { handleGetAudit(req, res, ctx); return; }
       if (urlPath === '/api/missions'  && req.method === 'GET')  { handleGetMissions(req, res, ctx); return; }
       if (urlPath === '/api/users'     && req.method === 'GET')  { handleGetUsers(req, res, ctx); return; }
+      if (urlPath === '/api/brain'     && req.method === 'GET')  { handleGetBrain(req, res, ctx); return; }
     }
 
     // ── Legacy 3D dashboard ──
