@@ -14,6 +14,7 @@ import {
   isOwner,
   routingAuditPath,
   missionsFilePath,
+  loadGMState,
 } from '@galaxia/core';
 
 export interface RouteContext {
@@ -149,4 +150,30 @@ export function handleGetMe(_req: IncomingMessage, res: ServerResponse, ctx: Rou
       scope: ctx.user.scope,
     },
   });
+}
+
+// ── GET /api/brain ─────────────────────────────────────────────────────────
+// Payload for the 3D brain view on the Overview tab: per-project GM state
+// and recent actions, so the renderer can draw live connections between
+// project nodes and the agents that were recently dispatched for them.
+
+export function handleGetBrain(_req: IncomingMessage, res: ServerResponse, ctx: RouteContext): void {
+  if (!requireAuth(res, ctx.user)) return;
+  const projects: Record<string, unknown> = {};
+  for (const p of (ctx.config.projects ?? [])) {
+    if (!userCanAccess(ctx.user!, p.name)) continue;
+    const gms = loadGMState(ctx.config.dataDir, p.name);
+    projects[p.name] = {
+      gm: {
+        enabled:       gms.enabled,
+        paused:        gms.paused,
+        healthScore:   gms.healthScore,
+        cyclesRun:     gms.cyclesRun,
+        lastReviewAt:  gms.lastReviewAt ?? null,
+      },
+      recentActions:    gms.recentActions.slice(-10),
+      activeObjectives: gms.currentObjectives.filter((o) => o.status === 'active').length,
+    };
+  }
+  writeJSON(res, 200, { projects });
 }

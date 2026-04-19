@@ -17,8 +17,8 @@
     nav button { background:none; border:none; color:var(--muted); padding:.9rem 0; cursor:pointer; font-size:.9rem; border-bottom:2px solid transparent; font-family:inherit; }
     nav button.active { color:var(--fg); border-bottom-color:var(--accent); }
     nav button:hover { color:var(--fg); }
-    main { padding:1.5rem; max-width:1200px; margin:auto; }
-    .grid { display:grid; gap:1rem; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); }
+    main { padding:1.5rem; max-width:1400px; margin:auto; }
+    .grid { display:grid; gap:1rem; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); }
     .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:1rem 1.2rem; }
     .card h3 { margin:0 0 .5rem; font-size:.8rem; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:500; }
     .card .big { font-size:1.8rem; font-weight:600; }
@@ -34,12 +34,27 @@
     .hint { color:var(--muted); font-size:.85rem; margin-top:.5rem; }
     .toolbar { display:flex; gap:.5rem; margin-bottom:1rem; }
     .toolbar select, .toolbar input { padding:.5rem; background:#0b0d10; color:var(--fg); border:1px solid var(--border); border-radius:6px; font-size:.85rem; }
+    .split-3d { display:grid; grid-template-columns:1fr 1fr; gap:12px; height:44vh; min-height:360px; margin-bottom:1rem; }
+    .panel-3d { position:relative; background:#08090e; border-radius:10px; border:1px solid var(--border); overflow:hidden; }
+    .panel-3d .label { position:absolute; top:10px; left:14px; font-size:.7rem; color:var(--muted); z-index:2; letter-spacing:.1em; text-transform:uppercase; pointer-events:none; }
+    .panel-3d .tooltip { position:absolute; top:10px; right:14px; font-size:.75rem; color:var(--fg); background:rgba(21,24,29,.85); padding:.3rem .6rem; border-radius:4px; border:1px solid var(--border); z-index:2; pointer-events:none; opacity:0; transition:opacity .2s; max-width:60%; }
+    .panel-3d .tooltip.on { opacity:1; }
+    .panel-3d canvas { display:block; width:100%; height:100%; }
+    @media (max-width: 768px) { .split-3d { grid-template-columns:1fr; height:auto; } .panel-3d { height:40vh; } }
   </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
   <header>
     <h1>🌌 Galaxia OS — Dashboard</h1>
-    <div class="user"><span id="user-info">Chargement…</span><a href="3d.html">3D view</a><a href="#" id="logout">Logout</a></div>
+    <div class="user"><span id="user-info">Chargement…</span><a href="3d.html">Legacy 3D</a><a href="#" id="logout">Logout</a></div>
   </header>
   <nav>
     <button class="active" data-tab="overview">Overview</button>
@@ -50,10 +65,26 @@
   </nav>
   <main id="view"></main>
 
-  <script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ────────────────────────────────────────────────────────────────────
+    //  Data + helpers
+    // ────────────────────────────────────────────────────────────────────
     const $ = (sel) => document.querySelector(sel);
     const view = $('#view');
     let currentUser = null;
+
+    // Colors per agent type — mirrors packages/core's AGENT_TYPES.
+    const AGENT_COLORS = {
+      dev:'#58A6FF', cicd:'#3FB950', test:'#FFA657', analyse:'#BC8CFF',
+      controle:'#FF6B6B', veille:'#7B61FF', ideas:'#FFD700', contenu:'#FF6EFF',
+      review:'#00D4FF', maintenance:'#8B949E',
+    };
+
+    // Status color for project nodes.
+    const STATUS_COLORS = { healthy:'#3FB950', warning:'#FFA657', critical:'#FF6B6B', unknown:'#8B949E' };
 
     async function api(path) {
       const res = await fetch(path);
@@ -65,33 +96,431 @@
       const me = await api('api/me');
       if (!me.authenticated) { window.location.href = 'login.html'; return; }
       currentUser = me.user;
-      $('#user-info').innerHTML = `<strong>${me.user.name}</strong> · ${me.user.role} · scope [${me.user.scope.join(', ')}]`;
+      $('#user-info').innerHTML = `<strong>${esc(me.user.name)}</strong> · ${esc(me.user.role)} · scope [${me.user.scope.map(esc).join(', ')}]`;
     }
 
     function esc(s) {
       const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML;
     }
 
+    // ────────────────────────────────────────────────────────────────────
+    //  3D scenes — disposed on tab change via `activeScenes`
+    // ────────────────────────────────────────────────────────────────────
+    let activeScenes = [];
+    function disposeActiveScenes() {
+      for (const s of activeScenes) { try { s.dispose(); } catch { /* ignore */ } }
+      activeScenes = [];
+    }
+
+    function makeRenderer(canvas) {
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      const w = canvas.clientWidth || 400;
+      const h = canvas.clientHeight || 300;
+      renderer.setSize(w, h, false);
+      return renderer;
+    }
+
+    // ── BRAIN 3D ────────────────────────────────────────────────────────
+    // Central Galaxia core + project nodes in a ring + agent nodes around
+    // active projects + animated particles along edges for recent dispatches.
+    function setupBrain(canvas, brainData, projectsData) {
+      const scene = new THREE.Scene();
+      scene.background = null;
+      const camera = new THREE.PerspectiveCamera(55, canvas.clientWidth/canvas.clientHeight, 0.1, 500);
+      camera.position.set(0, 3, 12);
+      camera.lookAt(0, 0, 0);
+
+      const renderer = makeRenderer(canvas);
+      const controls = new OrbitControls(camera, canvas);
+      controls.enableDamping = true;
+      controls.enablePan = false;
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.6;
+
+      // Lights — cheap ambient + one directional.
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.5);
+      dir.position.set(5, 10, 7);
+      scene.add(dir);
+
+      // Central Galaxia core — violet, pulsing.
+      const core = new THREE.Mesh(
+        new THREE.SphereGeometry(0.9, 32, 32),
+        new THREE.MeshStandardMaterial({ color:0xb084ff, emissive:0x5b2ecb, emissiveIntensity:0.6, roughness:0.3 }),
+      );
+      scene.add(core);
+      // Core glow halo.
+      const halo = new THREE.Mesh(
+        new THREE.SphereGeometry(1.35, 32, 32),
+        new THREE.MeshBasicMaterial({ color:0x7b61ff, transparent:true, opacity:0.08 }),
+      );
+      scene.add(halo);
+
+      // Collect projects the user has access to.
+      const projects = (projectsData?.projects ?? []).filter((p) => p);
+      const n = projects.length || 1;
+      const ring = 6;
+
+      const edges = [];   // { src:Vector3, dst:Vector3, color:Color, active:boolean }
+      const particles = []; // { edgeIdx:number, progress:number, mesh:Mesh }
+
+      // Project nodes.
+      const projectNodes = new Map();
+      projects.forEach((proj, i) => {
+        const angle = (i / n) * Math.PI * 2;
+        const pos = new THREE.Vector3(Math.cos(angle) * ring, 0, Math.sin(angle) * ring);
+        const statusColor = STATUS_COLORS[proj.runtime?.status] ?? STATUS_COLORS.unknown;
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.55, 24, 24),
+          new THREE.MeshStandardMaterial({ color:statusColor, emissive:statusColor, emissiveIntensity:0.35, roughness:0.4 }),
+        );
+        mesh.position.copy(pos);
+        mesh.userData = { kind:'project', name:proj.name };
+        scene.add(mesh);
+        projectNodes.set(proj.name, { mesh, pos });
+
+        // Edge core → project.
+        edges.push({ src:new THREE.Vector3(0,0,0), dst:pos.clone(), color:new THREE.Color(statusColor), active:false });
+
+        // Agent nodes around each project, only for agents recently dispatched.
+        const brain = brainData?.projects?.[proj.name];
+        const recent = brain?.recentActions ?? [];
+        const dispatchedAgents = new Set(
+          recent.filter((a) => a.kind === 'dispatch' && a.agent).map((a) => a.agent),
+        );
+        if (dispatchedAgents.size === 0 && proj.gm?.enabled) {
+          // GM enabled but no recent dispatch — show a faint idle halo.
+          const idle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.8, 16, 16),
+            new THREE.MeshBasicMaterial({ color:statusColor, transparent:true, opacity:0.06 }),
+          );
+          idle.position.copy(pos);
+          scene.add(idle);
+        }
+        const agentsArr = [...dispatchedAgents];
+        agentsArr.forEach((agentType, ai) => {
+          const aa = (ai / Math.max(agentsArr.length, 1)) * Math.PI * 2;
+          const aLocal = new THREE.Vector3(Math.cos(aa) * 1.8, Math.sin(aa * 1.3) * 0.5, Math.sin(aa) * 1.8);
+          const aPos = pos.clone().add(aLocal);
+          const aColor = AGENT_COLORS[agentType] ?? '#ffffff';
+          const am = new THREE.Mesh(
+            new THREE.SphereGeometry(0.22, 16, 16),
+            new THREE.MeshStandardMaterial({ color:aColor, emissive:aColor, emissiveIntensity:0.5 }),
+          );
+          am.position.copy(aPos);
+          am.userData = { kind:'agent', type:agentType, project:proj.name };
+          scene.add(am);
+          // Edge project → agent (animated).
+          edges.push({ src:pos.clone(), dst:aPos.clone(), color:new THREE.Color(aColor), active:true });
+        });
+      });
+
+      // Build the edge geometry as LineSegments.
+      const edgePositions = new Float32Array(edges.length * 6);
+      const edgeColors = new Float32Array(edges.length * 6);
+      edges.forEach((e, i) => {
+        edgePositions.set([e.src.x, e.src.y, e.src.z, e.dst.x, e.dst.y, e.dst.z], i * 6);
+        const c = e.color;
+        edgeColors.set([c.r, c.g, c.b, c.r, c.g, c.b], i * 6);
+      });
+      const edgeGeo = new THREE.BufferGeometry();
+      edgeGeo.setAttribute('position', new THREE.BufferAttribute(edgePositions, 3));
+      edgeGeo.setAttribute('color', new THREE.BufferAttribute(edgeColors, 3));
+      const edgeMat = new THREE.LineBasicMaterial({ vertexColors:true, transparent:true, opacity:0.35 });
+      const lines = new THREE.LineSegments(edgeGeo, edgeMat);
+      scene.add(lines);
+
+      // Spawn particles for active edges (agent dispatches).
+      edges.forEach((e, i) => {
+        if (!e.active) return;
+        const pm = new THREE.Mesh(
+          new THREE.SphereGeometry(0.07, 8, 8),
+          new THREE.MeshBasicMaterial({ color:e.color }),
+        );
+        scene.add(pm);
+        particles.push({ edgeIdx:i, progress:Math.random(), mesh:pm });
+      });
+
+      // Empty-state hint.
+      if (projects.length === 0) {
+        const sprite = new THREE.Mesh(
+          new THREE.RingGeometry(2.8, 3.2, 32),
+          new THREE.MeshBasicMaterial({ color:0x8b949e, transparent:true, opacity:0.15, side:THREE.DoubleSide }),
+        );
+        sprite.rotation.x = Math.PI / 2;
+        scene.add(sprite);
+      }
+
+      // Hover tooltip.
+      const tooltipEl = canvas.parentElement.querySelector('.tooltip');
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2(-10, -10);
+      const onMove = (ev) => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      };
+      canvas.addEventListener('pointermove', onMove);
+
+      // Resize handler.
+      const onResize = () => {
+        const w = canvas.clientWidth, h = canvas.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h, false);
+      };
+      const resizeObs = new ResizeObserver(onResize);
+      resizeObs.observe(canvas);
+
+      // Animation loop.
+      let raf = 0;
+      const start = performance.now();
+      function tick() {
+        raf = requestAnimationFrame(tick);
+        const t = (performance.now() - start) / 1000;
+        // Core pulse.
+        const pulse = 1 + Math.sin(t * 2) * 0.04;
+        core.scale.setScalar(pulse);
+        halo.scale.setScalar(pulse);
+        halo.material.opacity = 0.06 + Math.sin(t * 2) * 0.03;
+        // Particles slide along their edges.
+        for (const p of particles) {
+          p.progress += 0.008;
+          if (p.progress > 1) p.progress = 0;
+          const e = edges[p.edgeIdx];
+          p.mesh.position.lerpVectors(e.src, e.dst, p.progress);
+        }
+        // Hover check.
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(scene.children, false);
+        const hit = intersects.find((i) => i.object.userData?.kind);
+        if (hit && tooltipEl) {
+          const d = hit.object.userData;
+          tooltipEl.textContent = d.kind === 'project'
+            ? `📦 ${d.name}`
+            : `🤖 ${d.type} → ${d.project}`;
+          tooltipEl.classList.add('on');
+        } else if (tooltipEl) {
+          tooltipEl.classList.remove('on');
+        }
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      tick();
+
+      return {
+        dispose() {
+          cancelAnimationFrame(raf);
+          resizeObs.disconnect();
+          canvas.removeEventListener('pointermove', onMove);
+          renderer.dispose();
+          scene.traverse((o) => {
+            if (o.geometry) o.geometry.dispose?.();
+            if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose?.());
+          });
+        },
+      };
+    }
+
+    // ── GALAXY 3D ───────────────────────────────────────────────────────
+    // Projects as planets in a star field — adapted from the legacy 3d.html
+    // for a canvas instead of a full page.
+    function setupGalaxy(canvas, projectsData, stateData) {
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x000008);
+      const camera = new THREE.PerspectiveCamera(60, canvas.clientWidth/canvas.clientHeight, 0.1, 600);
+      camera.position.set(0, 14, 24);
+
+      const renderer = makeRenderer(canvas);
+      const controls = new OrbitControls(camera, canvas);
+      controls.enableDamping = true;
+      controls.enablePan = false;
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.35;
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+      const sun = new THREE.PointLight(0xffc080, 2.5, 80);
+      sun.position.set(0, 0, 0);
+      scene.add(sun);
+
+      // Sun at the center — Galaxia herself.
+      const sunMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(1.4, 32, 32),
+        new THREE.MeshBasicMaterial({ color:0xffdc9a }),
+      );
+      scene.add(sunMesh);
+
+      // Star background — sparse random points.
+      const starCount = 500;
+      const starPos = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount; i++) {
+        const r = 80 + Math.random() * 100;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        starPos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+        starPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+        starPos[i*3+2] = r * Math.cos(phi);
+      }
+      const starGeo = new THREE.BufferGeometry();
+      starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+      const starMat = new THREE.PointsMaterial({ color:0xffffff, size:0.5, transparent:true, opacity:0.7 });
+      scene.add(new THREE.Points(starGeo, starMat));
+
+      // Planets — one per project in scope.
+      const projects = (projectsData?.projects ?? []).filter((p) => p);
+      const runtimeMap = stateData?.projects ?? {};
+      const n = projects.length || 1;
+      const planets = [];
+      projects.forEach((proj, i) => {
+        const angle = (i / n) * Math.PI * 2;
+        const orbit = 6 + i * 2.2;
+        const runtime = runtimeMap[proj.name] ?? {};
+        const status = runtime.status ?? 'unknown';
+        const color = STATUS_COLORS[status] ?? STATUS_COLORS.unknown;
+        const size = 0.5 + Math.min((runtime.backlogCount ?? 0) / 6, 1.2);
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(size, 24, 24),
+          new THREE.MeshStandardMaterial({ color, emissive:color, emissiveIntensity:0.15, roughness:0.4 }),
+        );
+        mesh.position.set(Math.cos(angle) * orbit, Math.sin(angle * 0.4) * 0.6, Math.sin(angle) * orbit);
+        mesh.userData = { kind:'project', name:proj.name, status, backlog:runtime.backlogCount ?? 0 };
+        scene.add(mesh);
+        // Orbit ring (faint).
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(orbit - 0.02, orbit + 0.02, 64),
+          new THREE.MeshBasicMaterial({ color:0x2a2e34, side:THREE.DoubleSide, transparent:true, opacity:0.5 }),
+        );
+        ring.rotation.x = Math.PI / 2;
+        scene.add(ring);
+        planets.push({ mesh, orbit, baseAngle:angle, speed:0.0008 + i * 0.00015 });
+      });
+
+      if (projects.length === 0) {
+        const emptyRing = new THREE.Mesh(
+          new THREE.RingGeometry(4, 4.2, 64),
+          new THREE.MeshBasicMaterial({ color:0x8b949e, transparent:true, opacity:0.2, side:THREE.DoubleSide }),
+        );
+        emptyRing.rotation.x = Math.PI / 2;
+        scene.add(emptyRing);
+      }
+
+      const tooltipEl = canvas.parentElement.querySelector('.tooltip');
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2(-10, -10);
+      const onMove = (ev) => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+      };
+      canvas.addEventListener('pointermove', onMove);
+
+      const onResize = () => {
+        const w = canvas.clientWidth, h = canvas.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h, false);
+      };
+      const resizeObs = new ResizeObserver(onResize);
+      resizeObs.observe(canvas);
+
+      let raf = 0;
+      const start = performance.now();
+      function tick() {
+        raf = requestAnimationFrame(tick);
+        const t = (performance.now() - start) / 1000;
+        sunMesh.rotation.y += 0.002;
+        sunMesh.material.color.setHSL(0.09 + Math.sin(t) * 0.02, 0.7, 0.65);
+        for (const p of planets) {
+          const angle = p.baseAngle + t * p.speed * 80;
+          p.mesh.position.x = Math.cos(angle) * p.orbit;
+          p.mesh.position.z = Math.sin(angle) * p.orbit;
+          p.mesh.rotation.y += 0.01;
+        }
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObjects(planets.map((p) => p.mesh), false);
+        if (hits.length && tooltipEl) {
+          const d = hits[0].object.userData;
+          tooltipEl.textContent = `${d.name} · ${d.status} · backlog:${d.backlog}`;
+          tooltipEl.classList.add('on');
+        } else if (tooltipEl) {
+          tooltipEl.classList.remove('on');
+        }
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      tick();
+
+      return {
+        dispose() {
+          cancelAnimationFrame(raf);
+          resizeObs.disconnect();
+          canvas.removeEventListener('pointermove', onMove);
+          renderer.dispose();
+          scene.traverse((o) => {
+            if (o.geometry) o.geometry.dispose?.();
+            if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose?.());
+          });
+        },
+      };
+    }
+
+    // ────────────────────────────────────────────────────────────────────
+    //  Tab renderers
+    // ────────────────────────────────────────────────────────────────────
     async function renderOverview() {
-      const [state, projects] = await Promise.all([api('api/state'), api('api/projects')]);
-      const sys = state.system ?? {};
+      disposeActiveScenes();
+      // Lay out the two 3D panels + metric cards container.
       view.innerHTML = `
-        <div class="grid">
-          <div class="card"><h3>CPU</h3><div class="big">${esc(sys.cpu ?? '—')}</div></div>
-          <div class="card"><h3>RAM</h3><div class="big">${esc(sys.ram ?? '—')}</div></div>
-          <div class="card"><h3>Disk</h3><div class="big">${esc(sys.disk ?? '—')}</div></div>
-          <div class="card"><h3>PM2 online</h3><div class="big">${esc(sys.pm2Online ?? '—')}</div></div>
-          <div class="card"><h3>Projects in scope</h3><div class="big">${projects.projects.length}</div><div class="sub">sur ${(state.projects ? Object.keys(state.projects).length : 0) || projects.projects.length}</div></div>
-          <div class="card"><h3>Dernière mise à jour</h3><div class="big" style="font-size:1rem">${esc(state.lastUpdated ?? '—')}</div></div>
+        <div class="split-3d">
+          <div class="panel-3d">
+            <div class="label">🧠 Cerveau</div>
+            <div class="tooltip"></div>
+            <canvas id="brain-canvas"></canvas>
+          </div>
+          <div class="panel-3d">
+            <div class="label">🌌 Galaxia</div>
+            <div class="tooltip"></div>
+            <canvas id="galaxy-canvas"></canvas>
+          </div>
         </div>
-        <div class="card" style="margin-top:1rem">
-          <h3>Daily stats</h3>
-          <pre>${esc(JSON.stringify(state.dailyStats ?? {}, null, 2))}</pre>
-        </div>
+        <div class="grid" id="metric-cards"></div>
+        <div class="card" style="margin-top:1rem" id="daily-stats"></div>
       `;
+
+      // Fetch data in parallel.
+      const [state, projects, brain] = await Promise.all([
+        api('api/state').catch(() => ({})),
+        api('api/projects').catch(() => ({ projects: [] })),
+        api('api/brain').catch(() => ({ projects: {} })),
+      ]);
+
+      // Metric cards.
+      const sys = state.system ?? {};
+      const projInScope = projects.projects?.length ?? 0;
+      const projTotal = (state.projects ? Object.keys(state.projects).length : 0) || projInScope;
+      document.getElementById('metric-cards').innerHTML = `
+        <div class="card"><h3>CPU</h3><div class="big">${esc(sys.cpu ?? '—')}</div></div>
+        <div class="card"><h3>RAM</h3><div class="big">${esc(sys.ram ?? '—')}</div></div>
+        <div class="card"><h3>Disk</h3><div class="big">${esc(sys.disk ?? '—')}</div></div>
+        <div class="card"><h3>PM2 online</h3><div class="big">${esc(sys.pm2Online ?? '—')}</div></div>
+        <div class="card"><h3>Projects in scope</h3><div class="big">${projInScope}</div><div class="sub">sur ${projTotal}</div></div>
+        <div class="card"><h3>Dernière mise à jour</h3><div class="big" style="font-size:.95rem">${esc(state.lastUpdated ?? '—')}</div></div>
+      `;
+      document.getElementById('daily-stats').innerHTML = `
+        <h3>Daily stats</h3>
+        <pre>${esc(JSON.stringify(state.dailyStats ?? {}, null, 2))}</pre>
+      `;
+
+      // Wire the two 3D scenes.
+      const brainCanvas = document.getElementById('brain-canvas');
+      const galaxyCanvas = document.getElementById('galaxy-canvas');
+      if (brainCanvas) activeScenes.push(setupBrain(brainCanvas, brain, projects));
+      if (galaxyCanvas) activeScenes.push(setupGalaxy(galaxyCanvas, projects, state));
     }
 
     async function renderProjects() {
+      disposeActiveScenes();
       const { projects } = await api('api/projects');
       if (projects.length === 0) { view.innerHTML = '<div class="empty">Aucun projet dans votre scope.</div>'; return; }
       view.innerHTML = `<table>
@@ -100,7 +529,7 @@
           <tr>
             <td><strong>${esc(p.name)}</strong></td>
             <td><span class="pill">${esc(p.path)}</span></td>
-            <td>${p.gm.enabled ? `<span class="pill owner">on · ${esc(p.gm.intervalMinutes ?? 30)}min</span>` : '<span class="pill">off</span>'}</td>
+            <td>${p.gm?.enabled ? `<span class="pill owner">on · ${esc(p.gm.intervalMinutes ?? 30)}min</span>` : '<span class="pill">off</span>'}</td>
             <td class="status-${esc(p.runtime?.status ?? 'unknown')}">${esc(p.runtime?.status ?? 'unknown')}</td>
             <td>${esc(p.runtime?.lastCycle ?? '—')}</td>
             <td>${esc(p.runtime?.backlogCount ?? 0)}</td>
@@ -110,6 +539,7 @@
     }
 
     async function renderAudit() {
+      disposeActiveScenes();
       const { entries } = await api('api/audit?n=50');
       if (entries.length === 0) { view.innerHTML = '<div class="empty">Pas d\'entrées d\'audit.</div>'; return; }
       view.innerHTML = `<table>
@@ -128,6 +558,7 @@
     }
 
     async function renderMissions() {
+      disposeActiveScenes();
       const { missions } = await api('api/missions');
       if (missions.length === 0) { view.innerHTML = '<div class="empty">Aucune mission.</div>'; return; }
       view.innerHTML = `<table>
@@ -143,6 +574,7 @@
     }
 
     async function renderUsers() {
+      disposeActiveScenes();
       const res = await fetch('api/users');
       if (res.status === 403) { view.innerHTML = '<div class="empty">Réservé à l\'owner.</div>'; return; }
       const { users, owner } = await res.json();
@@ -170,7 +602,7 @@
         document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         const tab = btn.dataset.tab;
-        tabs[tab]?.().catch(err => { view.innerHTML = `<div class="empty">Erreur: ${esc(err.message)}</div>`; });
+        tabs[tab]?.().catch(err => { disposeActiveScenes(); view.innerHTML = `<div class="empty">Erreur: ${esc(err.message)}</div>`; });
       });
     });
 
@@ -179,6 +611,8 @@
       await fetch('api/logout', { method: 'POST' });
       window.location.href = 'login.html';
     });
+
+    window.addEventListener('beforeunload', disposeActiveScenes);
 
     (async () => {
       await loadMe();
