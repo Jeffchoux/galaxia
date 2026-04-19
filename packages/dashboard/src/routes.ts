@@ -400,9 +400,20 @@ export async function handlePostChat(req: IncomingMessage, res: ServerResponse, 
   const prompt = `${CHAT_SYSTEM}\n\nConversation récente:\n${historyBlock}\n${attachBlock}\n\nRéponds à ce dernier message USER.`;
 
   try {
+    // Route le chat dashboard vers Claude Max (heavy) via le taskType
+    // 'creative-writing' qui matche la règle 'creative-writing-uses-claude'
+    // (tier heavy + provider claude + transport CLI). Si Jeff est inactif
+    // en CLI (heartbeat stale), le guard laisse Claude Max passer. Si
+    // actif, fallback auto vers Groq — mais on ne veut PAS ça pour le
+    // dashboard chat (c'est Jeff parlant à Galaxia, la qualité Max est
+    // utile). On touche le heartbeat pour que les GMs autonomes basculent
+    // sur Groq le temps qu'il parle au dashboard.
+    try {
+      writeFileSync('/tmp/claude-max-active.lock', '');
+    } catch { /* best-effort */ }
     const started = Date.now();
     const result = await callLLM(
-      { dataClass: 'personal', taskType: 'dashboard-chat' },
+      { dataClass: 'personal', taskType: 'creative-writing', bypassInteractiveGuard: true },
       prompt,
       ctx.config,
     );

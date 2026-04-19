@@ -360,9 +360,10 @@ export async function callLLM(
 
   // Interactive-session guard : si la décision appelle Claude tier heavy
   // MAIS Jeff est actif en Claude Code CLI (heartbeat file < 5min),
-  // on remap vers le tier 'light' (Groq) pour ne pas épuiser sa fenêtre
-  // Max 5h partagée. Audit trail le signale.
-  if (decision.tier === 'heavy' && decision.provider === 'claude') {
+  // on remap vers le tier 'light' (Groq). Skippé quand
+  // ctx.bypassInteractiveGuard=true (dashboard chat veut Max même si
+  // l'utilisateur est actif — parce que L'UTILISATEUR EST JEFF).
+  if (!ctx.bypassInteractiveGuard && decision.tier === 'heavy' && decision.provider === 'claude') {
     const hb = claudeMaxHeartbeat();
     if (hb.busy) {
       const lightCfg = config.llm.light;

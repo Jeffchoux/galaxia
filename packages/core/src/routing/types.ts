@@ -38,6 +38,11 @@ export interface RoutingContext {
   // 0-10 override; optional, pure authoring signal for rules to inspect.
   sensitivity?: number;
   location?: RoutingLocation;
+  // Bypass l'interactive-guard (qui remap heavy->light quand Jeff est
+  // actif en CLI). True = on veut Claude Max même si heartbeat frais —
+  // utile pour le dashboard chat (l'utilisateur EST Jeff, il veut Max
+  // pour lui-même). False/undefined = guard appliqué normalement.
+  bypassInteractiveGuard?: boolean;
 }
 
 export interface TimeWindow {
