@@ -73,6 +73,16 @@ export {
   validateRules,
 } from './routing/index.js';
 
+// Interactive-session guard — détecte si Jeff bosse en CLI Claude Code
+// et si oui, évite de cramer sa fenêtre Max depuis Galaxia.
+export {
+  CLAUDE_MAX_HEARTBEAT_PATH,
+  CLAUDE_MAX_HEARTBEAT_TTL_MS,
+  claudeMaxHeartbeat,
+  isClaudeMaxBusy,
+} from './interactive-guard.js';
+export type { ClaudeMaxHeartbeatInfo } from './interactive-guard.js';
+
 // Git sync guard for pieces
 export type { SyncOutcome } from './git-sync/index.js';
 export { syncPiece, describeSyncOutcome } from './git-sync/index.js';

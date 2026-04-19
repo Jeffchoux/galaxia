@@ -15,6 +15,7 @@ import type { GalaxiaConfig, LLMTier, LLMProvider, LLMProviderConfig } from './t
 import type { RoutingContext, RoutingDecision, RoutingAuditEntry } from './routing/types.js';
 import { decide } from './routing/engine.js';
 import { logRouting } from './routing/audit.js';
+import { claudeMaxHeartbeat } from './interactive-guard.js';
 
 type ClaudeTransport = 'cli' | 'http';
 
@@ -356,6 +357,23 @@ export async function callLLM(
   }
   const ctx = tierOrCtx;
   const decision = decide(ctx, config);
+
+  // Interactive-session guard : si la décision appelle Claude tier heavy
+  // MAIS Jeff est actif en Claude Code CLI (heartbeat file < 5min),
+  // on remap vers le tier 'light' (Groq) pour ne pas épuiser sa fenêtre
+  // Max 5h partagée. Audit trail le signale.
+  if (decision.tier === 'heavy' && decision.provider === 'claude') {
+    const hb = claudeMaxHeartbeat();
+    if (hb.busy) {
+      const lightCfg = config.llm.light;
+      decision.tier = 'light';
+      decision.provider = lightCfg.provider;
+      decision.model = lightCfg.model;
+      decision.matchedRule = `${decision.matchedRule} + interactive-guard`;
+      decision.reason = `${decision.reason} | overridden by claude-max-interactive-guard (heartbeat age=${Math.round((hb.ageMs ?? 0) / 1000)}s)`;
+    }
+  }
+
   const startedAt = Date.now();
   const timestamp = new Date().toISOString();
   const promptHash = sha256(prompt);
