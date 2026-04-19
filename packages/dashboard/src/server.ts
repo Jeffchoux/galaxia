@@ -171,6 +171,10 @@ export function startDashboard(port = 3333, staticDir?: string, dataDir?: string
     sseClients.clear();
   });
 
+  const shutdown = () => { server.close(() => process.exit(0)); };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+
   server.listen(port, () => {
     console.log(`[galaxia] 3D Command Center running at http://localhost:${port}`);
     console.log(`[galaxia]   Dashboard: http://localhost:${port}/`);

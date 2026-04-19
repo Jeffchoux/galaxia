@@ -1,1230 +1,891 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GALAXIA — Your AI Company in a Box</title>
-<meta name="description" content="Install GALAXIA. Describe your idea. 10 AI agents build, deploy, and grow it autonomously. Open source, $0/month AI cost.">
-<meta name="theme-color" content="#06080F">
-<meta property="og:title" content="GALAXIA — Autonomous AI Operating System">
-<meta property="og:description" content="10 AI agents that build, deploy, monitor, and grow your business — autonomously. $0/month.">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GALAXIA — Autonomous AI operator for your projects</title>
+<meta name="description" content="Ten AI agents that build, deploy, test, and grow your projects autonomously. Self-hosted, MIT-licensed, $0/month LLM cost.">
+<meta name="theme-color" content="#0A0B0D">
+<meta property="og:title" content="GALAXIA — Autonomous AI operator">
+<meta property="og:description" content="Ten AI agents that build, deploy, and grow your projects while you sleep. Self-hosted, open source.">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://galaxia.ai-deskflow.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-/* ═══════════════ RESET ═══════════════ */
+/* ── reset ─────────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-::selection{background:rgba(201,151,62,.3);color:#F5F0E6}
-
-:root{
-  --void:#06080F;
-  --cosmos:#0E1525;
-  --nebula:#141E35;
-  --gold:#C9973E;
-  --gold-bright:#E8B94A;
-  --gold-dim:rgba(201,151,62,.12);
-  --gold-line:rgba(201,151,62,.18);
-  --teal:#3EDBC6;
-  --teal-dim:rgba(62,219,198,.08);
-  --star:#F5F0E6;
-  --star-mid:#BDB8AC;
-  --dust:#6B7089;
-  --dust-faint:#3D4259;
-  --serif:'Fraunces',Georgia,serif;
-  --sans:'Outfit',system-ui,sans-serif;
-  --mono:'JetBrains Mono',ui-monospace,monospace;
-  --ease-out-expo:cubic-bezier(.16,1,.3,1);
-  --max-w:1180px;
-}
-
-html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
-body{font-family:var(--sans);background:var(--void);color:var(--star);line-height:1.6;overflow-x:hidden}
-
-/* Grain overlay */
-body::after{
-  content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:.035;
-  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-repeat:repeat;background-size:256px 256px;
-}
-
+html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;scroll-behavior:smooth}
+img,svg{display:block;max-width:100%}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 a{color:inherit;text-decoration:none}
-img{max-width:100%;display:block}
-button{cursor:pointer;font-family:inherit}
+input{font:inherit;color:inherit}
 
-/* Scrollbar */
-::-webkit-scrollbar{width:6px}
-::-webkit-scrollbar-track{background:var(--void)}
-::-webkit-scrollbar-thumb{background:rgba(201,151,62,.25);border-radius:3px}
-
-/* ═══════════════ CANVAS ═══════════════ */
-#galaxy-canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
-
-/* ═══════════════ OVERLAY ═══════════════ */
-#overlay{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
-
-/* ═══════════════ UTILITIES ═══════════════ */
-.container{max-width:var(--max-w);margin:0 auto;padding:0 clamp(1.25rem,4vw,2.5rem);width:100%}
-
-.reveal{opacity:0;transform:translateY(28px);transition:opacity .9s var(--ease-out-expo),transform .9s var(--ease-out-expo)}
-.reveal.vis{opacity:1;transform:none}
-.rd1{transition-delay:.1s}.rd2{transition-delay:.2s}.rd3{transition-delay:.3s}.rd4{transition-delay:.4s}.rd5{transition-delay:.5s}
-
-.tag{
-  display:inline-block;font-family:var(--sans);font-size:.7rem;font-weight:600;
-  text-transform:uppercase;letter-spacing:.2em;color:var(--gold);
-  padding:.4rem 1rem;border:1px solid var(--gold-line);border-radius:2px;
-  background:var(--gold-dim);
+/* ── tokens ────────────────────────────────────────── */
+:root{
+  --ink:#0A0B0D;
+  --ink-2:#0F1014;
+  --ink-3:#14151A;
+  --rule:#1C1D22;
+  --rule-soft:#14151A;
+  --muted:#6F7078;
+  --text:#E8E6DD;
+  --text-dim:#B4B2A8;
+  --lime:#9FEB5C;
+  --lime-dim:rgba(159,235,92,.14);
+  --lime-line:rgba(159,235,92,.30);
+  --warn:#FF7A45;
+  --serif:'Instrument Serif',Georgia,serif;
+  --sans:'Inter',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,monospace;
+  --maxw:1240px;
+  --gut:clamp(1.25rem,3.5vw,2.5rem);
 }
 
-.sec-title{
-  font-family:var(--serif);font-size:clamp(2.2rem,5vw,3.8rem);
-  font-weight:400;font-style:italic;line-height:1.15;
-  margin:.75rem 0 1rem;color:var(--star);
+::selection{background:var(--lime);color:var(--ink)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:var(--ink)}
+::-webkit-scrollbar-thumb{background:#24262C;border-radius:4px}
+
+body{
+  font-family:var(--sans);
+  background:var(--ink);
+  color:var(--text);
+  font-size:15px;
+  line-height:1.55;
+  font-feature-settings:"ss01","cv11";
+  overflow-x:hidden;
 }
 
-.sec-desc{font-size:clamp(.95rem,1.8vw,1.15rem);color:var(--dust);max-width:560px;line-height:1.75}
+/* subtle grid background */
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+  background-image:
+    linear-gradient(var(--rule-soft) 1px,transparent 1px),
+    linear-gradient(90deg,var(--rule-soft) 1px,transparent 1px);
+  background-size:64px 64px;
+  mask-image:radial-gradient(ellipse at 50% 0%,rgba(0,0,0,.6) 0%,transparent 70%);
+  -webkit-mask-image:radial-gradient(ellipse at 50% 0%,rgba(0,0,0,.6) 0%,transparent 70%);
+}
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.035;
+  background-image:url("data:image/svg+xml;utf8,<svg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
 
-/* ═══════════════ NAV ═══════════════ */
-.nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:1rem 0;transition:all .4s ease}
-.nav.scrolled{background:rgba(6,8,15,.82);backdrop-filter:blur(24px) saturate(1.2);border-bottom:1px solid rgba(201,151,62,.06)}
-.nav-inner{max-width:var(--max-w);margin:0 auto;padding:0 clamp(1.25rem,4vw,2.5rem);display:flex;align-items:center;justify-content:space-between}
-.nav-logo{font-family:var(--serif);font-size:1.1rem;font-weight:500;letter-spacing:.12em;color:var(--gold);text-transform:uppercase}
-.nav-links{display:flex;gap:2.25rem;align-items:center}
-.nav-links a{font-size:.8rem;font-weight:500;color:var(--dust);letter-spacing:.04em;transition:color .3s}
-.nav-links a:hover{color:var(--star)}
-.nav-gh{font-size:.75rem !important;font-weight:600 !important;padding:.45rem 1.1rem;border:1px solid var(--gold-line);color:var(--gold) !important;border-radius:2px;transition:all .3s}
-.nav-gh:hover{background:var(--gold);color:var(--void) !important;border-color:var(--gold)}
-@media(max-width:768px){.nav-links{display:none}}
+/* ── layout primitives ────────────────────────────── */
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--gut);position:relative;z-index:1}
+.rule{height:1px;background:var(--rule);border:0;margin:0}
+.rule-col{width:1px;background:var(--rule);align-self:stretch}
 
-/* ═══════════════ HERO ═══════════════ */
-.hero{position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:8rem 1.5rem 6rem;width:100%}
-.hero-content{position:relative;max-width:860px;text-align:center}
-
-.hero-badge{
+.eyebrow{
+  font-family:var(--mono);font-size:11px;font-weight:500;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
   display:inline-flex;align-items:center;gap:.6rem;
-  font-size:.72rem;font-weight:500;letter-spacing:.08em;
-  color:var(--dust);padding:.45rem 1.1rem;
-  border:1px solid var(--dust-faint);border-radius:2px;
-  margin-bottom:2.5rem;
 }
-.hero-dot{width:5px;height:5px;background:var(--teal);border-radius:50%;box-shadow:0 0 8px var(--teal);animation:pulse 2.5s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.eyebrow::before{content:'';width:14px;height:1px;background:currentColor}
+
+.kbd{
+  font-family:var(--mono);font-size:.72rem;padding:.15rem .45rem;
+  border:1px solid var(--rule);border-radius:3px;color:var(--text-dim);
+  background:var(--ink-2);
+}
+
+/* ── nav ──────────────────────────────────────────── */
+.nav{
+  position:sticky;top:0;z-index:50;
+  background:rgba(10,11,13,.72);
+  backdrop-filter:blur(10px) saturate(140%);
+  -webkit-backdrop-filter:blur(10px) saturate(140%);
+  border-bottom:1px solid var(--rule);
+}
+.nav-inner{
+  display:flex;align-items:center;justify-content:space-between;
+  height:56px;
+}
+.logo{
+  font-family:var(--mono);font-weight:600;letter-spacing:.02em;
+  display:inline-flex;align-items:center;gap:.55rem;font-size:13px;
+}
+.logo-mark{
+  width:18px;height:18px;border:1px solid var(--lime);
+  position:relative;display:inline-block;
+}
+.logo-mark::before,.logo-mark::after{
+  content:'';position:absolute;background:var(--lime);
+}
+.logo-mark::before{inset:3px 3px 8px 3px}
+.logo-mark::after{width:4px;height:4px;bottom:2px;right:2px;border-radius:50%}
+.logo-ver{color:var(--muted);font-weight:400}
+
+.nav-links{display:flex;align-items:center;gap:1.75rem;font-size:13px}
+.nav-links a{color:var(--text-dim);transition:color .15s}
+.nav-links a:hover{color:var(--text)}
+.nav-cta{
+  font-family:var(--mono);font-size:12px;padding:.5rem .85rem;
+  border:1px solid var(--rule);border-radius:3px;color:var(--text);
+  transition:border-color .15s,color .15s;
+}
+.nav-cta:hover{border-color:var(--lime-line);color:var(--lime)}
+@media (max-width:640px){.nav-links a:not(.nav-cta){display:none}}
+
+/* ── hero ─────────────────────────────────────────── */
+.hero{
+  padding:clamp(4rem,10vw,7rem) 0 clamp(3rem,7vw,5rem);
+  border-bottom:1px solid var(--rule);
+  position:relative;
+}
+.hero-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);
+  gap:clamp(2rem,5vw,5rem);
+  align-items:start;
+}
+@media (max-width:860px){.hero-grid{grid-template-columns:1fr;gap:3rem}}
+
+.hero-status{
+  display:inline-flex;align-items:center;gap:.6rem;
+  font-family:var(--mono);font-size:12px;color:var(--text-dim);
+  padding:.35rem .7rem;border:1px solid var(--rule);border-radius:100px;
+  background:var(--ink-2);margin-bottom:2rem;
+}
+.hero-status-dot{
+  width:6px;height:6px;border-radius:50%;background:var(--lime);
+  box-shadow:0 0 0 0 rgba(159,235,92,.6);
+  animation:pulse 2.2s ease-out infinite;
+}
+@keyframes pulse{
+  0%{box-shadow:0 0 0 0 rgba(159,235,92,.55)}
+  70%{box-shadow:0 0 0 8px rgba(159,235,92,0)}
+  100%{box-shadow:0 0 0 0 rgba(159,235,92,0)}
+}
 
 .hero h1{
-  font-family:var(--serif);font-weight:300;font-style:italic;
-  font-size:clamp(3.2rem,9vw,7rem);line-height:1;letter-spacing:-.02em;
-  margin-bottom:.5rem;
+  font-family:var(--serif);font-weight:400;
+  font-size:clamp(2.6rem,6.8vw,5rem);
+  line-height:.98;letter-spacing:-.02em;
+  color:var(--text);margin-bottom:1.5rem;
 }
-.hero h1 em{
-  font-style:normal;font-weight:400;
-  background:linear-gradient(135deg,var(--gold-bright) 0%,var(--gold) 40%,#A07828 100%);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  text-shadow:none;
-}
+.hero h1 em{font-style:italic;color:var(--lime);font-weight:400}
+.hero h1 .slash{color:var(--muted);font-style:normal;margin:0 .15em}
 
 .hero-sub{
-  font-size:clamp(1rem,2vw,1.25rem);font-weight:300;
-  color:var(--star-mid);letter-spacing:.02em;
-  max-width:500px;margin:1.5rem auto 0;line-height:1.7;
+  font-size:clamp(1rem,1.4vw,1.15rem);
+  color:var(--text-dim);max-width:40ch;margin-bottom:2.5rem;
 }
 
-.hero-rule{width:48px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);border:none;margin:2.5rem auto}
-
-.hero-terminal{
-  max-width:480px;margin:0 auto;text-align:left;
-  padding:1rem 1.5rem;border-radius:3px;
-  background:rgba(14,21,37,.7);border:1px solid var(--gold-line);
-  font-family:var(--mono);font-size:.85rem;color:var(--teal);
-  backdrop-filter:blur(12px);position:relative;
+.hero-cmd{
+  font-family:var(--mono);font-size:13.5px;
+  background:var(--ink-2);border:1px solid var(--rule);
+  border-radius:4px;padding:.9rem 1rem;
+  display:flex;align-items:center;gap:.8rem;
+  position:relative;max-width:540px;
 }
-.hero-terminal .prompt{color:var(--gold);user-select:none}
-.copy-btn{
-  position:absolute;top:.65rem;right:.65rem;padding:.25rem .6rem;
-  font-size:.65rem;font-weight:600;font-family:var(--sans);
-  border:1px solid var(--dust-faint);border-radius:2px;
-  background:transparent;color:var(--dust);cursor:pointer;transition:all .2s;letter-spacing:.04em;
+.hero-cmd .p{color:var(--lime)}
+.hero-cmd .c{color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.hero-cmd button{
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  padding:.35rem .6rem;border:1px solid var(--rule);border-radius:3px;
+  color:var(--muted);background:var(--ink);
+  transition:color .15s,border-color .15s;flex-shrink:0;
 }
-.copy-btn:hover{border-color:var(--gold-line);color:var(--gold)}
+.hero-cmd button:hover{color:var(--lime);border-color:var(--lime-line)}
 
-.hero-stats{
-  display:flex;justify-content:center;gap:3rem;margin-top:2.5rem;flex-wrap:wrap;
-}
-.hero-stat{text-align:center}
-.hero-stat-val{font-family:var(--serif);font-size:1.6rem;font-weight:500;color:var(--gold)}
-.hero-stat-label{font-size:.7rem;color:var(--dust);text-transform:uppercase;letter-spacing:.12em;margin-top:.15rem}
-
-.hero-ctas{display:flex;gap:1rem;justify-content:center;margin-top:2.5rem;flex-wrap:wrap}
-
-/* ═══════════════ BUTTONS ═══════════════ */
+.hero-ctas{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1.25rem}
 .btn{
+  font-family:var(--mono);font-size:12.5px;font-weight:500;
+  padding:.7rem 1.1rem;border:1px solid transparent;border-radius:3px;
   display:inline-flex;align-items:center;gap:.5rem;
-  font-size:.85rem;font-weight:600;letter-spacing:.03em;
-  padding:.75rem 1.75rem;border-radius:2px;border:none;
-  transition:all .35s var(--ease-out-expo);
+  transition:transform .15s,background .15s,border-color .15s,color .15s;
 }
-.btn-gold{background:var(--gold);color:var(--void)}
-.btn-gold:hover{background:var(--gold-bright);transform:translateY(-2px);box-shadow:0 8px 30px rgba(201,151,62,.25)}
-.btn-ghost{background:transparent;color:var(--star);border:1px solid var(--dust-faint)}
-.btn-ghost:hover{border-color:var(--gold-line);color:var(--gold);transform:translateY(-2px)}
+.btn-primary{background:var(--lime);color:var(--ink);border-color:var(--lime)}
+.btn-primary:hover{background:#B8F379;transform:translateY(-1px)}
+.btn-ghost{color:var(--text);border-color:var(--rule)}
+.btn-ghost:hover{border-color:var(--lime-line);color:var(--lime)}
+.btn svg{width:14px;height:14px}
 
-/* ═══════════════ IMMERSIVE BAR ═══════════════ */
-.immersive-bar{
-  position:relative;z-index:2;border-top:1px solid var(--gold-line);
-  display:flex;justify-content:center;padding:1.5rem 1rem;
-  background:rgba(6,8,15,.6);backdrop-filter:blur(12px);
+/* right column: crew manifest card */
+.hero-card{
+  border:1px solid var(--rule);border-radius:4px;
+  background:linear-gradient(180deg,var(--ink-2),var(--ink));
+  padding:1.25rem;
+  font-family:var(--mono);font-size:12.5px;
 }
-.immersive-inner{display:flex;align-items:center;gap:1.25rem}
-
-/* Heartbeat mic button */
-.heartbeat-mic{
-  position:relative;width:48px;height:48px;border-radius:50%;
-  border:1px solid var(--gold-line);background:transparent;
-  color:var(--gold);display:flex;align-items:center;justify-content:center;
-  transition:all .3s;cursor:pointer;
+.hero-card-head{
+  display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--rule);padding-bottom:.8rem;margin-bottom:.8rem;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.12em;font-size:10.5px;
 }
-.heartbeat-mic:hover{border-color:var(--gold);box-shadow:0 0 20px rgba(201,151,62,.15)}
-.heartbeat-mic svg{position:relative;z-index:2}
-
-.mic-rings{position:absolute;inset:0;pointer-events:none}
-.mic-rings .ring{
-  position:absolute;inset:-4px;border-radius:50%;
-  border:1px solid var(--gold);opacity:0;
+.hero-card-head::before{content:'◉'}
+.crew-row{
+  display:grid;grid-template-columns:30px 1fr auto;gap:.8rem;
+  align-items:center;padding:.4rem 0;
+  border-bottom:1px dashed var(--rule-soft);
 }
-.mic-rings .ring.r1{animation:mic-pulse 2s ease-out infinite}
-.mic-rings .ring.r2{animation:mic-pulse 2s ease-out infinite .5s}
-
-@keyframes mic-pulse{
-  0%{transform:scale(1);opacity:.4}
-  100%{transform:scale(1.5);opacity:0}
+.crew-row:last-child{border-bottom:0}
+.crew-num{color:var(--muted);font-size:11px}
+.crew-name{color:var(--text);font-weight:500}
+.crew-state{
+  font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--lime);display:inline-flex;align-items:center;gap:.35rem;
 }
-
-/* Mic waveform canvas */
-#mic-wave{display:block;opacity:.5}
-
-.immersive-text{text-align:center}
-.immersive-text-main{font-family:var(--serif);font-size:1rem;font-weight:400;font-style:italic;color:var(--star)}
-.immersive-text-sub{font-size:.6rem;font-weight:600;letter-spacing:.15em;color:var(--dust);margin-top:.2rem;text-transform:uppercase}
-
-/* Camera button */
-.camera-btn{
-  width:48px;height:48px;border-radius:50%;
-  border:1px solid rgba(62,219,198,.3);background:transparent;
-  color:var(--teal);display:flex;align-items:center;justify-content:center;
-  transition:all .3s;cursor:pointer;
-}
-.camera-btn:hover{border-color:var(--teal);box-shadow:0 0 20px rgba(62,219,198,.15)}
-.camera-btn.active{border-color:var(--teal);box-shadow:0 0 15px rgba(62,219,198,.2)}
-.camera-btn.denied{opacity:.3;cursor:not-allowed}
-
-.heartbeat-mic.active{border-color:var(--gold);animation:heartbeat-fast .8s ease-in-out infinite}
-.heartbeat-mic.denied{opacity:.3;cursor:not-allowed}
-@keyframes heartbeat-fast{0%,100%{transform:scale(1)}15%{transform:scale(1.12)}30%{transform:scale(1)}45%{transform:scale(1.08)}}
-
-/* ═══════════════ AGENT LABELS ═══════════════ */
-.agent-label{
-  position:absolute;pointer-events:none;opacity:0;transform:translateY(8px);
-  transition:opacity .4s,transform .4s;
-  font-family:var(--sans);font-size:.7rem;font-weight:600;
-  letter-spacing:.08em;text-transform:uppercase;color:var(--gold);
-  padding:.3rem .7rem;border:1px solid var(--gold-line);border-radius:2px;
-  background:rgba(6,8,15,.85);backdrop-filter:blur(8px);white-space:nowrap;
-}
-.agent-label.visible{opacity:1;transform:translateY(0)}
-
-/* ═══════════════ SECTION DIVIDER ═══════════════ */
-.divider{
-  width:100%;height:1px;border:none;
-  background:linear-gradient(90deg,transparent 0%,var(--gold-line) 20%,var(--gold-line) 80%,transparent 100%);
-  margin:0;
+.crew-state.idle{color:var(--muted)}
+.crew-state.work{color:var(--warn)}
+.crew-state::before{
+  content:'';width:5px;height:5px;border-radius:50%;background:currentColor;
 }
 
-/* ═══════════════ HOW IT WORKS ═══════════════ */
-.how{position:relative;z-index:1;padding:clamp(5rem,12vw,9rem) 0}
-.how .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:3.5rem;position:relative}
-
-/* Orbital connecting line */
-.how .steps::before{
-  content:'';position:absolute;top:28px;left:calc(16.67%);right:calc(16.67%);
-  height:1px;background:linear-gradient(90deg,transparent,var(--gold-line),var(--gold-line),transparent);
+/* ── metrics bar ─────────────────────────────────── */
+.metrics{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  border-bottom:1px solid var(--rule);
+}
+@media (max-width:720px){.metrics{grid-template-columns:repeat(2,1fr)}}
+.metric{
+  padding:1.5rem var(--gut);
+  border-right:1px solid var(--rule);
+  display:flex;flex-direction:column;gap:.35rem;
+}
+.metric:last-child{border-right:0}
+@media (max-width:720px){.metric:nth-child(2){border-right:0}}
+.metric-val{
+  font-family:var(--serif);font-size:clamp(1.8rem,4vw,2.4rem);
+  line-height:1;letter-spacing:-.01em;color:var(--text);
+}
+.metric-val em{font-style:italic;color:var(--lime);font-weight:400}
+.metric-lab{
+  font-family:var(--mono);font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted);
 }
 
-.step{text-align:center;position:relative}
+/* ── section shell ───────────────────────────────── */
+section{position:relative;z-index:1}
+.section{padding:clamp(4rem,8vw,6.5rem) 0;border-bottom:1px solid var(--rule)}
+.section-head{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);
+  gap:clamp(1.5rem,4vw,3rem);
+  margin-bottom:clamp(2.5rem,5vw,4rem);
+  align-items:end;
+}
+@media (max-width:720px){.section-head{grid-template-columns:1fr}}
+.section-title{
+  font-family:var(--serif);font-weight:400;
+  font-size:clamp(1.9rem,4vw,2.7rem);
+  line-height:1.05;letter-spacing:-.01em;color:var(--text);
+}
+.section-title em{color:var(--lime);font-style:italic}
+.section-lede{
+  font-size:1rem;color:var(--text-dim);max-width:52ch;
+}
+.section-lede strong{color:var(--text);font-weight:500}
+
+/* ── steps ───────────────────────────────────────── */
+.steps{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:0;border:1px solid var(--rule);border-radius:4px;
+  background:var(--ink-2);
+}
+@media (max-width:860px){.steps{grid-template-columns:1fr}}
+.step{
+  padding:1.5rem;border-right:1px solid var(--rule);
+  display:flex;flex-direction:column;gap:1rem;
+}
+.step:last-child{border-right:0}
+@media (max-width:860px){
+  .step{border-right:0;border-bottom:1px solid var(--rule)}
+  .step:last-child{border-bottom:0}
+}
+.step-head{
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--rule);padding-bottom:.75rem;
+}
 .step-num{
-  display:inline-flex;align-items:center;justify-content:center;
-  width:56px;height:56px;border-radius:50%;
-  border:1px solid var(--gold-line);
-  font-family:var(--serif);font-size:1.4rem;font-weight:400;font-style:italic;
-  color:var(--gold);margin-bottom:1.5rem;
-  background:var(--void);position:relative;z-index:2;
-  transition:all .4s;
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+  color:var(--lime);text-transform:uppercase;
 }
-.step:hover .step-num{background:var(--gold);color:var(--void);border-color:var(--gold);box-shadow:0 0 30px rgba(201,151,62,.2)}
-.step h3{font-family:var(--serif);font-size:1.4rem;font-weight:400;font-style:italic;margin-bottom:.5rem}
-.step p{font-size:.9rem;color:var(--dust);line-height:1.6;max-width:280px;margin:0 auto .75rem}
-
-.code-block{
-  text-align:left;padding:.75rem 1rem;border-radius:3px;
-  background:rgba(14,21,37,.6);border:1px solid rgba(201,151,62,.08);
-  font-family:var(--mono);font-size:.78rem;color:var(--teal);
-  white-space:nowrap;overflow-x:auto;position:relative;
+.step-tag{font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.step h3{
+  font-family:var(--serif);font-weight:400;
+  font-size:1.6rem;line-height:1.1;color:var(--text);
 }
-.code-block .p{color:var(--gold);user-select:none}
+.step p{color:var(--text-dim);font-size:.92rem}
+.step-cmd{
+  font-family:var(--mono);font-size:12.5px;
+  background:var(--ink);border:1px solid var(--rule);border-radius:3px;
+  padding:.7rem .8rem;color:var(--text);
+  overflow-x:auto;white-space:nowrap;
+}
+.step-cmd .p{color:var(--lime)}
+.step-cmd .s{color:var(--warn)}
 
-@media(max-width:768px){
-  .how .steps{grid-template-columns:1fr;gap:3rem}
-  .how .steps::before{display:none}
+/* ── agents manifest ─────────────────────────────── */
+.agents{
+  border:1px solid var(--rule);border-radius:4px;
+  background:var(--ink-2);overflow:hidden;
+}
+.agents-head{
+  display:grid;
+  grid-template-columns:56px minmax(120px,.8fr) minmax(0,2fr) minmax(0,1.2fr) 80px;
+  gap:1rem;padding:.8rem 1.25rem;
+  border-bottom:1px solid var(--rule);
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);
+  background:var(--ink-3);
+}
+.agent{
+  display:grid;
+  grid-template-columns:56px minmax(120px,.8fr) minmax(0,2fr) minmax(0,1.2fr) 80px;
+  gap:1rem;padding:1.1rem 1.25rem;
+  border-bottom:1px solid var(--rule);
+  align-items:center;
+  transition:background .15s;
+}
+.agent:hover{background:var(--ink-3)}
+.agent:last-child{border-bottom:0}
+.a-num{
+  font-family:var(--mono);font-size:12px;color:var(--lime);
+}
+.a-name{
+  font-family:var(--mono);font-weight:600;font-size:13px;color:var(--text);
+  letter-spacing:-.01em;
+}
+.a-role{font-size:.92rem;color:var(--text-dim)}
+.a-signal{font-family:var(--mono);font-size:11.5px;color:var(--muted);letter-spacing:.04em}
+.a-signal span{color:var(--text-dim)}
+.a-state{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--lime);
+  display:inline-flex;align-items:center;gap:.35rem;justify-self:end;
+}
+.a-state::before{
+  content:'';width:6px;height:6px;border-radius:50%;background:currentColor;
+}
+@media (max-width:860px){
+  .agents-head{display:none}
+  .agent{
+    grid-template-columns:40px 1fr auto;
+    grid-template-areas:"num name state" "num role role" "num sig sig";
+    gap:.25rem .75rem;padding:1rem 1rem;
+  }
+  .a-num{grid-area:num;align-self:start;margin-top:.15rem}
+  .a-name{grid-area:name}
+  .a-role{grid-area:role;font-size:.88rem}
+  .a-signal{grid-area:sig;font-size:10.5px;opacity:.8}
+  .a-state{grid-area:state}
 }
 
-/* ═══════════════ PRICING ═══════════════ */
-.pricing{position:relative;z-index:1;padding:clamp(5rem,12vw,9rem) 0}
-.pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;max-width:960px;margin:0 auto}
-
-.price-card{
-  padding:2.5rem 2rem;border-radius:4px;background:var(--cosmos);
-  border:1px solid rgba(201,151,62,.06);transition:all .4s;position:relative;
+/* ── stack / diagram ────────────────────────────── */
+.stack{
+  display:grid;grid-template-columns:1fr 1fr;gap:0;
+  border:1px solid var(--rule);border-radius:4px;overflow:hidden;
+  background:var(--ink-2);
 }
-.price-card:hover{border-color:rgba(201,151,62,.15);transform:translateY(-3px)}
-.price-card.featured{border-color:var(--gold-line);box-shadow:0 0 40px rgba(201,151,62,.06)}
-.price-card.featured::before{
-  content:'POPULAR';position:absolute;top:-10px;left:50%;transform:translateX(-50%);
-  font-size:.6rem;font-weight:700;letter-spacing:.15em;padding:.25rem .8rem;
-  background:var(--gold);color:var(--void);border-radius:2px;
+@media (max-width:860px){.stack{grid-template-columns:1fr}}
+.stack-col{padding:1.5rem;border-right:1px solid var(--rule)}
+.stack-col:last-child{border-right:0}
+@media (max-width:860px){
+  .stack-col{border-right:0;border-bottom:1px solid var(--rule)}
+  .stack-col:last-child{border-bottom:0}
 }
-.price-tier{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.15em;color:var(--gold);margin-bottom:.5rem}
-.price-amount{font-family:var(--serif);font-size:3rem;font-weight:300;font-style:italic;line-height:1.1;margin-bottom:.25rem}
-.price-amount span{font-family:var(--sans);font-size:.85rem;font-weight:400;font-style:normal;color:var(--dust)}
-.price-desc{font-size:.85rem;color:var(--dust);margin-bottom:1.5rem;line-height:1.5}
-.price-features{list-style:none;margin-bottom:2rem}
-.price-features li{display:flex;align-items:flex-start;gap:.5rem;font-size:.85rem;color:var(--star-mid);padding:.35rem 0}
-.price-features li::before{content:"\2192";color:var(--gold);flex-shrink:0;font-size:.75rem;margin-top:.15rem}
-.price-btn{
-  display:block;width:100%;padding:.75rem;text-align:center;font-size:.8rem;font-weight:600;
-  letter-spacing:.04em;border-radius:2px;border:none;transition:all .3s;
+.stack-col h4{
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:1rem;
 }
-.price-btn-outline{background:transparent;border:1px solid var(--dust-faint);color:var(--star)}
-.price-btn-outline:hover{border-color:var(--gold-line);color:var(--gold)}
-.price-btn-gold{background:var(--gold);color:var(--void)}
-.price-btn-gold:hover{background:var(--gold-bright);box-shadow:0 4px 20px rgba(201,151,62,.25)}
+.stack-list{list-style:none;display:flex;flex-direction:column;gap:.55rem}
+.stack-list li{
+  display:flex;justify-content:space-between;align-items:baseline;gap:1rem;
+  font-size:.93rem;color:var(--text-dim);
+  border-bottom:1px dashed var(--rule-soft);padding-bottom:.55rem;
+}
+.stack-list li:last-child{border-bottom:0}
+.stack-list strong{color:var(--text);font-weight:500}
+.stack-list em{font-family:var(--mono);font-size:11.5px;font-style:normal;color:var(--muted)}
 
-@media(max-width:768px){.pricing-grid{grid-template-columns:1fr;max-width:380px;margin:0 auto}}
+/* ── pricing ─────────────────────────────────────── */
+.pricing{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:0;
+  border:1px solid var(--rule);border-radius:4px;overflow:hidden;
+  background:var(--ink-2);
+}
+@media (max-width:860px){.pricing{grid-template-columns:1fr}}
+.price{
+  padding:2rem 1.75rem;
+  border-right:1px solid var(--rule);
+  display:flex;flex-direction:column;gap:1.2rem;
+  position:relative;
+}
+.price:last-child{border-right:0}
+@media (max-width:860px){
+  .price{border-right:0;border-bottom:1px solid var(--rule)}
+  .price:last-child{border-bottom:0}
+}
+.price.featured{background:linear-gradient(180deg,rgba(159,235,92,.04),transparent 60%)}
+.price-tag{
+  position:absolute;top:1rem;right:1rem;
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--lime);border:1px solid var(--lime-line);
+  padding:.2rem .45rem;border-radius:2px;background:var(--lime-dim);
+}
+.price-tier{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);
+}
+.price-amount{
+  font-family:var(--serif);font-size:2.6rem;line-height:1;
+  color:var(--text);letter-spacing:-.02em;
+}
+.price-amount span{font-size:.95rem;color:var(--muted);font-family:var(--sans);font-style:normal;margin-left:.25rem}
+.price-desc{color:var(--text-dim);font-size:.92rem;min-height:2.8em}
+.price-list{list-style:none;display:flex;flex-direction:column;gap:.55rem;flex:1}
+.price-list li{
+  font-size:.88rem;color:var(--text-dim);
+  display:flex;align-items:flex-start;gap:.6rem;
+}
+.price-list li::before{
+  content:'';width:5px;height:5px;background:var(--lime);border-radius:50%;
+  margin-top:.55em;flex-shrink:0;
+}
+.price .btn{width:100%;justify-content:center}
 
-/* ═══════════════ FINAL CTA ═══════════════ */
-.cta{position:relative;z-index:1;padding:clamp(6rem,14vw,10rem) 0;text-align:center;overflow:hidden}
+/* ── cta ─────────────────────────────────────────── */
+.cta{padding:clamp(4rem,8vw,6.5rem) 0;text-align:center;position:relative;overflow:hidden}
 .cta::before{
-  content:'';position:absolute;inset:0;
-  background:radial-gradient(ellipse 60% 50% at 50% 80%,rgba(201,151,62,.04) 0%,transparent 70%);
+  content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:120%;height:400px;
+  background:radial-gradient(ellipse at center,rgba(159,235,92,.08),transparent 60%);
+  pointer-events:none;
 }
-.cta-terminal{
-  max-width:500px;margin:2rem auto;text-align:left;
-  padding:1.1rem 1.5rem;border-radius:3px;
-  background:rgba(14,21,37,.7);border:1px solid var(--gold-line);
-  font-family:var(--mono);font-size:.9rem;color:var(--teal);
-  backdrop-filter:blur(12px);position:relative;
+.cta-inner{position:relative;z-index:1;max-width:760px;margin:0 auto;padding:0 var(--gut)}
+.cta h2{
+  font-family:var(--serif);font-weight:400;
+  font-size:clamp(2rem,5vw,3.2rem);line-height:1.05;letter-spacing:-.01em;
+  color:var(--text);margin:1.2rem 0 1.4rem;
 }
-.cta-terminal .prompt{color:var(--gold);user-select:none}
+.cta h2 em{color:var(--lime);font-style:italic}
+.cta-lede{color:var(--text-dim);margin-bottom:2rem;font-size:1.02rem}
+.cta .hero-cmd{margin:0 auto 1.25rem}
+.cta .hero-ctas{justify-content:center}
 
-.cta-btns{display:flex;gap:1rem;justify-content:center;margin-top:2rem;flex-wrap:wrap}
-
-.signup-row{display:flex;gap:.5rem;max-width:400px;margin:2.5rem auto 0;flex-wrap:wrap;justify-content:center}
-.signup-row input{
-  flex:1;min-width:200px;padding:.7rem 1.1rem;border-radius:2px;
-  border:1px solid var(--dust-faint);background:var(--cosmos);
-  color:var(--star);font-size:.85rem;font-family:var(--sans);
-  outline:none;transition:border-color .2s;
+/* ── footer ──────────────────────────────────────── */
+footer{padding:3rem 0;color:var(--muted);font-size:13px}
+.foot{
+  display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:2rem;
+  margin-bottom:2rem;
 }
-.signup-row input:focus{border-color:var(--gold)}
-.signup-row input::placeholder{color:var(--dust)}
-.signup-row button{
-  padding:.7rem 1.25rem;border-radius:2px;border:none;
-  background:var(--gold);color:var(--void);font-size:.8rem;font-weight:600;
-  font-family:var(--sans);letter-spacing:.03em;transition:all .25s;
+@media (max-width:720px){.foot{grid-template-columns:1fr 1fr;gap:1.5rem}}
+.foot-col h5{
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--text-dim);margin-bottom:1rem;font-weight:500;
 }
-.signup-row button:hover{background:var(--gold-bright)}
-.signup-note{font-size:.72rem;color:var(--dust);margin-top:.6rem;letter-spacing:.02em}
-
-/* ═══════════════ FOOTER ═══════════════ */
-.footer{position:relative;z-index:1;padding:3rem 0;border-top:1px solid rgba(201,151,62,.06);text-align:center}
-.footer-links{display:flex;gap:2.5rem;justify-content:center;margin-bottom:1.5rem;flex-wrap:wrap}
-.footer-links a{font-size:.8rem;color:var(--dust);letter-spacing:.04em;transition:color .2s}
-.footer-links a:hover{color:var(--gold)}
-.footer-meta{font-size:.72rem;color:var(--dust-faint);letter-spacing:.02em}
-.footer-meta a{color:var(--dust);transition:color .2s}
-.footer-meta a:hover{color:var(--gold)}
-
-/* ═══════════════ CAMERA PREVIEW ═══════════════ */
-#camera-preview{
-  position:fixed;bottom:1.5rem;right:1.5rem;width:160px;height:120px;
-  border:1px solid var(--gold-line);border-radius:4px;overflow:hidden;
-  z-index:200;background:#000;
+.foot-col a{
+  display:block;color:var(--muted);margin-bottom:.55rem;transition:color .15s;
 }
-#camera-preview video{width:100%;height:100%;object-fit:cover}
-
-/* ═══════════════ FINGER CURSOR ═══════════════ */
-#finger-cursor{
-  position:fixed;width:16px;height:16px;border-radius:50%;
-  background:var(--gold);box-shadow:0 0 12px rgba(201,151,62,.5);
-  z-index:300;pointer-events:none;
-  transition:transform .1s,opacity .2s;
+.foot-col a:hover{color:var(--text)}
+.foot-lede{color:var(--text-dim);max-width:36ch;font-size:.92rem}
+.foot-bar{
+  display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;
+  padding-top:1.5rem;border-top:1px solid var(--rule);
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;color:var(--muted);
 }
+.foot-bar a{color:var(--text-dim)}
+.foot-bar a:hover{color:var(--lime)}
 
-/* ═══════════════ SCROLL REVEAL ═══════════════ */
-/* (handled by .reveal / .vis above) */
-
-/* ═══════════════ RESPONSIVE ═══════════════ */
-@media(max-width:768px){
-  .immersive-inner{flex-wrap:wrap;justify-content:center;gap:1rem}
-  .immersive-text-sub{display:none}
-}
-
-@media(max-width:480px){
-  .hero h1{font-size:2.8rem}
-  .hero-ctas{flex-direction:column;align-items:center}
-  .btn{width:100%;justify-content:center}
-  .hero-stats{gap:2rem}
-  .immersive-inner{flex-direction:column;align-items:center}
-  #camera-preview{width:120px;height:90px;bottom:1rem;right:1rem}
+/* ── reveal ──────────────────────────────────────── */
+.rev{opacity:0;transform:translateY(18px);transition:opacity .7s ease,transform .7s ease}
+.rev.on{opacity:1;transform:none}
+.rev.d1{transition-delay:.06s}
+.rev.d2{transition-delay:.12s}
+.rev.d3{transition-delay:.18s}
+.rev.d4{transition-delay:.24s}
+@media (prefers-reduced-motion:reduce){
+  .rev{opacity:1;transform:none;transition:none}
+  .hero-status-dot{animation:none}
 }
 </style>
 </head>
 <body>
 
-<!-- ═══════════════ 3D CANVAS ═══════════════ -->
-<canvas id="galaxy-canvas"></canvas>
+<nav class="nav">
+  <div class="wrap nav-inner">
+    <a href="#" class="logo">
+      <span class="logo-mark" aria-hidden="true"></span>
+      GALAXIA <span class="logo-ver">v0.1</span>
+    </a>
+    <div class="nav-links">
+      <a href="#how">Process</a>
+      <a href="#agents">Agents</a>
+      <a href="#stack">Stack</a>
+      <a href="#pricing">Pricing</a>
+      <a href="https://github.com/Jeffchoux/galaxia" target="_blank" rel="noopener" class="nav-cta">GitHub ↗</a>
+    </div>
+  </div>
+</nav>
 
-<!-- ═══════════════ OVERLAY (Hero + Nav) ═══════════════ -->
-<div id="overlay">
-  <nav class="nav" id="nav">
-    <div class="nav-inner">
-      <a href="#" class="nav-logo">Galaxia</a>
-      <div class="nav-links">
-        <a href="#how">Process</a>
-        <a href="#pricing">Pricing</a>
-        <a href="https://github.com/Jeffchoux/galaxia" class="nav-gh" target="_blank">GitHub</a>
+<!-- ── hero ───────────────────────────────────────── -->
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="hero-status rev"><span class="hero-status-dot"></span>Open source · MIT · self-hosted</div>
+      <h1 class="rev d1">An autonomous<br>AI operator<span class="slash">/</span><em>for your projects</em>.</h1>
+      <p class="hero-sub rev d2">Ten specialized agents plan, build, deploy, monitor, and grow whatever you ship — continuously, on your own server, on free LLMs.</p>
+      <div class="hero-cmd rev d3">
+        <span class="p">$</span>
+        <span class="c" id="inst-cmd">curl -fsSL https://galaxia.sh/install | bash</span>
+        <button type="button" onclick="copyCmd(this,'curl -fsSL https://galaxia.sh/install | bash')">COPY</button>
+      </div>
+      <div class="hero-ctas rev d4">
+        <a class="btn btn-primary" href="https://github.com/Jeffchoux/galaxia" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg>
+          Star on GitHub
+        </a>
+        <a class="btn btn-ghost" href="#how">Read the manual →</a>
       </div>
     </div>
-  </nav>
 
-  <section class="hero" id="hero">
-    <div class="hero-content">
-      <div class="hero-badge reveal">
-        <span class="hero-dot"></span>
-        Open Source &middot; MIT License &middot; $0/month AI
-      </div>
-      <h1 class="reveal rd1">Your AI Company<br><em>in a Box</em></h1>
-      <p class="hero-sub reveal rd2">Install. Describe your idea. Ten autonomous agents build, deploy, and grow it while you sleep.</p>
-      <hr class="hero-rule reveal rd3">
-      <div class="hero-terminal reveal rd3">
-        <span class="prompt">$ </span>curl -fsSL https://galaxia.sh/install | bash
-        <button class="copy-btn" onclick="copyCode(this,'curl -fsSL https://galaxia.sh/install | bash')">COPY</button>
-      </div>
-      <div class="hero-stats reveal rd4">
-        <div class="hero-stat"><div class="hero-stat-val">10</div><div class="hero-stat-label">AI Agents</div></div>
-        <div class="hero-stat"><div class="hero-stat-val">$0</div><div class="hero-stat-label">Monthly Cost</div></div>
-        <div class="hero-stat"><div class="hero-stat-val">24/7</div><div class="hero-stat-label">Autonomous</div></div>
-      </div>
-      <div class="hero-ctas reveal rd5">
-        <a href="https://github.com/Jeffchoux/galaxia" class="btn btn-gold" target="_blank">&#9733; Star on GitHub</a>
-        <a href="#how" class="btn btn-ghost">See How It Works</a>
+    <aside class="hero-card rev d2" aria-label="Live agent manifest">
+      <div class="hero-card-head"><span>CREW · LIVE</span><span>10 / 10</span></div>
+      <div class="crew-row"><span class="crew-num">01</span><span class="crew-name">orchestrator</span><span class="crew-state">active</span></div>
+      <div class="crew-row"><span class="crew-num">02</span><span class="crew-name">dev</span><span class="crew-state work">building</span></div>
+      <div class="crew-row"><span class="crew-num">03</span><span class="crew-name">cicd</span><span class="crew-state">ready</span></div>
+      <div class="crew-row"><span class="crew-num">04</span><span class="crew-name">test</span><span class="crew-state">ready</span></div>
+      <div class="crew-row"><span class="crew-num">05</span><span class="crew-name">analyse</span><span class="crew-state idle">idle</span></div>
+      <div class="crew-row"><span class="crew-num">06</span><span class="crew-name">controle</span><span class="crew-state">watching</span></div>
+      <div class="crew-row"><span class="crew-num">07</span><span class="crew-name">contenu</span><span class="crew-state idle">idle</span></div>
+      <div class="crew-row"><span class="crew-num">08</span><span class="crew-name">veille</span><span class="crew-state">scanning</span></div>
+      <div class="crew-row"><span class="crew-num">09</span><span class="crew-name">ideas</span><span class="crew-state idle">idle</span></div>
+      <div class="crew-row"><span class="crew-num">10</span><span class="crew-name">tasks</span><span class="crew-state work">dispatching</span></div>
+    </aside>
+  </div>
+</header>
+
+<!-- ── metrics ────────────────────────────────────── -->
+<section class="metrics" aria-label="key numbers">
+  <div class="metric"><div class="metric-val"><em>10</em></div><div class="metric-lab">specialized agents</div></div>
+  <div class="metric"><div class="metric-val">24/7</div><div class="metric-lab">autonomous loop</div></div>
+  <div class="metric"><div class="metric-val">$0</div><div class="metric-lab">monthly LLM bill</div></div>
+  <div class="metric"><div class="metric-val">MIT</div><div class="metric-lab">open source</div></div>
+</section>
+
+<!-- ── how it works ───────────────────────────────── -->
+<section class="section" id="how">
+  <div class="wrap">
+    <div class="section-head">
+      <div><span class="eyebrow rev">01 — process</span></div>
+      <div>
+        <h2 class="section-title rev d1">Three commands. <em>Infinite output.</em></h2>
+        <p class="section-lede rev d2" style="margin-top:1rem">
+          From zero to an autonomous AI-managed project in under <strong>sixty seconds</strong>. No SaaS dashboard. No monthly spend. It runs on your box, on your rules.
+        </p>
       </div>
     </div>
-  </section>
-</div>
 
-<!-- ═══════════════ AGENT LABELS (3D overlay) ═══════════════ -->
-<div id="agent-labels"></div>
-
-<!-- ═══════════════ IMMERSIVE BAR ═══════════════ -->
-<section class="immersive-bar" id="immersive-bar">
-  <div class="immersive-inner">
-    <button class="heartbeat-mic" id="mic-btn" title="Activer le micro">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
-      <div class="mic-rings"><div class="ring r1"></div><div class="ring r2"></div></div>
-    </button>
-    <canvas id="mic-wave" width="60" height="20"></canvas>
-    <div class="immersive-text">
-      <div class="immersive-text-main">Parle-moi</div>
-      <div class="immersive-text-sub">OU ACTIVE TA CAMERA POUR CONTROLER PAR GESTES</div>
+    <div class="steps">
+      <div class="step rev">
+        <div class="step-head"><span class="step-num">01 · install</span><span class="step-tag">one script</span></div>
+        <h3>Bootstrap the engine.</h3>
+        <p>Installs the core runtime, all ten agents, the dashboard, and wires Groq + Ollama as default providers.</p>
+        <div class="step-cmd"><span class="p">$</span> curl -fsSL galaxia.sh/install | bash</div>
+      </div>
+      <div class="step rev d1">
+        <div class="step-head"><span class="step-num">02 · describe</span><span class="step-tag">plain english</span></div>
+        <h3>State the mission.</h3>
+        <p>Tell it what you want in a sentence. The planner turns it into an architecture, a roadmap, and a task queue.</p>
+        <div class="step-cmd"><span class="p">$</span> galaxia init <span class="s">"SaaS for dog walkers"</span></div>
+      </div>
+      <div class="step rev d2">
+        <div class="step-head"><span class="step-num">03 · launch</span><span class="step-tag">always on</span></div>
+        <h3>Leave it running.</h3>
+        <p>The orchestrator loops through agents, ships features, tests endpoints, monitors health, and suggests next moves.</p>
+        <div class="step-cmd"><span class="p">$</span> galaxia start</div>
+      </div>
     </div>
-    <button class="camera-btn" id="cam-btn" title="Activer la camera">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-    </button>
   </div>
 </section>
 
-<!-- ═══════════════ BELOW-FOLD CONTENT ═══════════════ -->
-<main>
-  <hr class="divider">
-
-  <!-- HOW IT WORKS -->
-  <section class="how" id="how">
-    <div class="container">
-      <div style="text-align:center">
-        <span class="tag reveal">PROCESS</span>
-        <h2 class="sec-title reveal rd1">Three commands.<br>Infinite potential.</h2>
-        <p class="sec-desc reveal rd2" style="margin:0 auto">From zero to autonomous AI-managed project in under sixty seconds.</p>
-      </div>
-      <div class="steps">
-        <div class="step reveal">
-          <div class="step-num">1</div>
-          <h3>Install</h3>
-          <p>One command. All agents, the dashboard, everything.</p>
-          <div class="code-block"><span class="p">$ </span>curl -fsSL galaxia.sh/install | bash</div>
-        </div>
-        <div class="step reveal rd2">
-          <div class="step-num">2</div>
-          <h3>Describe</h3>
-          <p>Tell it your idea in plain English. It designs the architecture.</p>
-          <div class="code-block"><span class="p">$ </span>galaxia init <span style="color:var(--gold)">"SaaS for dog walkers"</span></div>
-        </div>
-        <div class="step reveal rd4">
-          <div class="step-num">3</div>
-          <h3>Launch</h3>
-          <p>AI agents build, deploy, and improve 24/7.</p>
-          <div class="code-block"><span class="p">$ </span>galaxia start</div>
-        </div>
+<!-- ── agents manifest ────────────────────────────── -->
+<section class="section" id="agents">
+  <div class="wrap">
+    <div class="section-head">
+      <div><span class="eyebrow rev">02 — crew</span></div>
+      <div>
+        <h2 class="section-title rev d1">Ten agents. <em>One mission.</em></h2>
+        <p class="section-lede rev d2" style="margin-top:1rem">
+          Each agent owns a domain. They work <strong>sequentially under CPU limits</strong>, write to a shared task queue, and report to the orchestrator. No tangled prompt spaghetti.
+        </p>
       </div>
     </div>
-  </section>
 
-  <hr class="divider">
-
-  <!-- PRICING -->
-  <section class="pricing" id="pricing">
-    <div class="container">
-      <div style="text-align:center">
-        <span class="tag reveal">PRICING</span>
-        <h2 class="sec-title reveal rd1">Start free.<br>Scale when ready.</h2>
+    <div class="agents rev d2">
+      <div class="agents-head">
+        <span>NO.</span><span>CODENAME</span><span>ROLE</span><span>SIGNAL</span><span style="text-align:right">STATE</span>
       </div>
-      <div class="pricing-grid">
-        <!-- Open Source -->
-        <div class="price-card reveal">
-          <div class="price-tier">Open Source</div>
-          <div class="price-amount">Free <span>forever</span></div>
-          <div class="price-desc">Everything to run your AI company.</div>
-          <ul class="price-features">
-            <li>Full GALAXIA engine</li><li>All 10 AI agents</li><li>CLI + 3D Dashboard</li>
-            <li>Mission Mode</li><li>Groq + Ollama (free LLMs)</li><li>Community support</li>
-          </ul>
-          <a href="https://github.com/Jeffchoux/galaxia" class="price-btn price-btn-outline" target="_blank">Get Started</a>
-        </div>
-        <!-- Pro (featured) -->
-        <div class="price-card featured reveal rd1">
-          <div class="price-tier">Pro</div>
-          <div class="price-amount">$29<span>/mo</span></div>
-          <div class="price-desc">For builders who want Claude-level intelligence.</div>
-          <ul class="price-features">
-            <li>Everything in Open Source</li><li>Up to 10 projects</li><li>Claude LLM integration</li>
-            <li>Cloud dashboard</li><li>Priority support</li><li>Advanced analytics</li>
-          </ul>
-          <button class="price-btn price-btn-gold">Join Waitlist</button>
-        </div>
-        <!-- Business -->
-        <div class="price-card reveal rd2">
-          <div class="price-tier">Business</div>
-          <div class="price-amount">$99<span>/mo</span></div>
-          <div class="price-desc">For teams managing multiple products.</div>
-          <ul class="price-features">
-            <li>Everything in Pro</li><li>Unlimited projects</li><li>White-label dashboard</li>
-            <li>Team access controls</li><li>Custom agents</li><li>Dedicated support</li>
-          </ul>
-          <button class="price-btn price-btn-outline">Contact Us</button>
-        </div>
+
+      <div class="agent">
+        <span class="a-num">01</span>
+        <span class="a-name">orchestrator</span>
+        <span class="a-role">Continuous loop. CPU-throttled. Schedules every agent, project by project, around the clock.</span>
+        <span class="a-signal"><span>pm2 ·</span> loop</span>
+        <span class="a-state">running</span>
+      </div>
+      <div class="agent">
+        <span class="a-num">02</span>
+        <span class="a-name">dev</span>
+        <span class="a-role">Ships features. Reads the task queue, writes code, opens PRs, hands off to cicd.</span>
+        <span class="a-signal"><span>in →</span> tasks</span>
+        <span class="a-state">online</span>
+      </div>
+      <div class="agent">
+        <span class="a-num">03</span>
+        <span class="a-name">cicd</span>
+        <span class="a-role">Runs test suites, deploys, auto-rolls back on failure. The safety net before production.</span>
+        <span class="a-signal"><span>after</span> dev</span>
+        <span class="a-state">online</span>
+      </div>
+      <div class="agent">
+        <span class="a-num">04</span>
+        <span class="a-name">test</span>
+        <span class="a-role">Endpoint health checks, contract tests, smoke runs against every live app.</span>
+        <span class="a-signal"><span>hit ·</span> /health</span>
+        <span class="a-state">online</span>
+      </div>
+      <div class="agent">
+        <span class="a-num">05</span>
+        <span class="a-name">analyse</span>
+        <span class="a-role">Performance telemetry, latency budgets, resource drift, weekly improvement briefs.</span>
+        <span class="a-signal"><span>read ·</span> metrics</span>
+        <span class="a-state">online</span>
+      </div>
+      <div class="agent">
+        <span class="a-num">06</span>
+        <span class="a-name">controle</span>
+        <span class="a-role">System health, SSL renewals, security posture, firewall drift, dependency audit.</span>
+        <span class="a-signal"><span>watch ·</span> infra</span>
+        <span class="a-state">online</span>
+      </div>
+      <div class="agent">
+        <span class="a-num">07</span>
+        <span class="a-name">contenu</span>
+        <span class="a-role">UX copy, onboarding flows, SEO metadata, microcopy polish, landing iteration.</span>
+        <span class="a-signal"><span>write ·</span> UX</span>
+        <span class="a-state">online</span>
+      </div>
+      <div class="agent">
+        <span class="a-num">08</span>
+        <span class="a-name">veille</span>
+        <span class="a-role">Daily AI/GitHub intelligence. Ranks new releases by relevance to your stack.</span>
+        <span class="a-signal"><span>08:00 ·</span> daily</span>
+        <span class="a-state">online</span>
+      </div>
+      <div class="agent">
+        <span class="a-num">09</span>
+        <span class="a-name">ideas</span>
+        <span class="a-role">Proposes new features based on user signals, analytics, and competitive scans.</span>
+        <span class="a-signal"><span>emit →</span> tasks</span>
+        <span class="a-state">online</span>
+      </div>
+      <div class="agent">
+        <span class="a-num">10</span>
+        <span class="a-name">tasks</span>
+        <span class="a-role">The shared queue. Dispatches work across agents, handles retries, tracks dependencies.</span>
+        <span class="a-signal"><span>queue ·</span> central</span>
+        <span class="a-state">running</span>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <hr class="divider">
-
-  <!-- CTA -->
-  <section class="cta" id="cta">
-    <div class="container" style="text-align:center;position:relative">
-      <span class="tag reveal">LAUNCH</span>
-      <h2 class="sec-title reveal rd1">Ready to build your<br><em style="color:var(--gold)">autonomous company?</em></h2>
-      <div class="cta-terminal reveal rd2">
-        <span class="prompt">$ </span>curl -fsSL https://galaxia.sh/install | bash
-        <button class="copy-btn" onclick="copyCode(this,'curl -fsSL https://galaxia.sh/install | bash')">COPY</button>
+<!-- ── stack ──────────────────────────────────────── -->
+<section class="section" id="stack">
+  <div class="wrap">
+    <div class="section-head">
+      <div><span class="eyebrow rev">03 — stack</span></div>
+      <div>
+        <h2 class="section-title rev d1">Self-hosted. <em>No vendor lock-in.</em></h2>
+        <p class="section-lede rev d2" style="margin-top:1rem">
+          Runs on any Ubuntu-class VPS. Free LLMs by default. <strong>Swap any layer</strong> without rewriting the agents.
+        </p>
       </div>
-      <div class="cta-btns reveal rd3">
-        <a href="https://github.com/Jeffchoux/galaxia" class="btn btn-gold" target="_blank">&#9733; Star on GitHub</a>
-        <a href="https://github.com/Jeffchoux/galaxia" class="btn btn-ghost" target="_blank">Read the Docs</a>
-      </div>
-      <div class="signup-row reveal rd4">
-        <input type="email" placeholder="your@email.com" aria-label="Email">
-        <button type="button">Join Waitlist</button>
-      </div>
-      <p class="signup-note reveal rd5">Get notified when GALAXIA Pro launches. No spam, ever.</p>
     </div>
-  </section>
 
-  <!-- FOOTER -->
-  <footer class="footer">
-    <div class="container">
-      <div class="footer-links">
-        <a href="https://github.com/Jeffchoux/galaxia" target="_blank">GitHub</a>
-        <a href="https://github.com/Jeffchoux/galaxia/wiki" target="_blank">Documentation</a>
-        <a href="#">Discord</a>
-        <a href="#">Twitter</a>
+    <div class="stack rev d2">
+      <div class="stack-col">
+        <h4>Runtime</h4>
+        <ul class="stack-list">
+          <li><strong>Node.js + Bun</strong><em>ES modules</em></li>
+          <li><strong>TypeScript</strong><em>strict mode</em></li>
+          <li><strong>PM2</strong><em>process manager</em></li>
+          <li><strong>SQLite (better-sqlite3)</strong><em>per-project state</em></li>
+          <li><strong>Nginx + Certbot</strong><em>reverse proxy, SSL</em></li>
+        </ul>
       </div>
-      <p class="footer-meta">Crafted by <a href="https://github.com/Jeffchoux" target="_blank">Jeff Choux</a> &middot; MIT License &middot; &copy; 2025 GALAXIA</p>
+      <div class="stack-col">
+        <h4>Intelligence</h4>
+        <ul class="stack-list">
+          <li><strong>Groq (llama-3.3-70b)</strong><em>light / medium</em></li>
+          <li><strong>Ollama (llama3.2)</strong><em>local / offline</em></li>
+          <li><strong>Claude Sonnet</strong><em>heavy / critical</em></li>
+          <li><strong>LLM Router</strong><em>cost-aware</em></li>
+          <li><strong>Plugin MCP servers</strong><em>design, image, data</em></li>
+        </ul>
+      </div>
     </div>
-  </footer>
-</main>
+  </div>
+</section>
 
-<!-- ═══════════════ CAMERA PREVIEW ═══════════════ -->
-<div id="camera-preview" style="display:none"><video id="camera-feed" autoplay playsinline></video></div>
-<div id="finger-cursor" style="display:none"></div>
+<!-- ── pricing ────────────────────────────────────── -->
+<section class="section" id="pricing">
+  <div class="wrap">
+    <div class="section-head">
+      <div><span class="eyebrow rev">04 — pricing</span></div>
+      <div>
+        <h2 class="section-title rev d1">Free to run. <em>Pay for comfort.</em></h2>
+        <p class="section-lede rev d2" style="margin-top:1rem">
+          The whole engine is open source. The hosted tiers exist for people who want managed Claude, a cloud dashboard, or white-label deployment.
+        </p>
+      </div>
+    </div>
 
-<!-- ═══════════════ JAVASCRIPT ═══════════════ -->
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-    "three/": "https://cdn.jsdelivr.net/npm/three@0.170.0/"
-  }
+    <div class="pricing rev d2">
+      <div class="price">
+        <div class="price-tier">Open source</div>
+        <div class="price-amount">$0<span>forever</span></div>
+        <div class="price-desc">Everything to run your AI company on your own box.</div>
+        <ul class="price-list">
+          <li>Full GALAXIA engine</li>
+          <li>All 10 agents + orchestrator</li>
+          <li>CLI + dashboard</li>
+          <li>Groq + Ollama routing</li>
+          <li>Community support (GitHub)</li>
+        </ul>
+        <a href="https://github.com/Jeffchoux/galaxia" target="_blank" rel="noopener" class="btn btn-ghost">Clone on GitHub →</a>
+      </div>
+
+      <div class="price featured">
+        <span class="price-tag">Popular</span>
+        <div class="price-tier">Pro</div>
+        <div class="price-amount">$29<span>/ month</span></div>
+        <div class="price-desc">For builders who want Claude-grade intelligence without wiring billing.</div>
+        <ul class="price-list">
+          <li>Everything in Open source</li>
+          <li>Managed Claude routing</li>
+          <li>Up to 10 projects</li>
+          <li>Cloud dashboard (multi-device)</li>
+          <li>Priority email support</li>
+        </ul>
+        <button type="button" class="btn btn-primary" onclick="openWaitlist()">Join waitlist</button>
+      </div>
+
+      <div class="price">
+        <div class="price-tier">Business</div>
+        <div class="price-amount">$99<span>/ month</span></div>
+        <div class="price-desc">For teams running multiple products under one roof.</div>
+        <ul class="price-list">
+          <li>Everything in Pro</li>
+          <li>Unlimited projects</li>
+          <li>White-label dashboard</li>
+          <li>Team access controls</li>
+          <li>Custom agents + dedicated support</li>
+        </ul>
+        <a href="mailto:jeffchoux@hotmail.com?subject=GALAXIA%20Business" class="btn btn-ghost">Talk to Jeff →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── cta ───────────────────────────────────────── -->
+<section class="cta">
+  <div class="cta-inner">
+    <span class="eyebrow rev">05 — deploy</span>
+    <h2 class="rev d1">Stop shipping alone. <em>Ship with a crew.</em></h2>
+    <p class="cta-lede rev d2">One command boots the whole operation. No signup, no credit card, no telemetry.</p>
+    <div class="hero-cmd rev d2">
+      <span class="p">$</span>
+      <span class="c">curl -fsSL https://galaxia.sh/install | bash</span>
+      <button type="button" onclick="copyCmd(this,'curl -fsSL https://galaxia.sh/install | bash')">COPY</button>
+    </div>
+    <div class="hero-ctas rev d3">
+      <a class="btn btn-primary" href="https://github.com/Jeffchoux/galaxia" target="_blank" rel="noopener">Star on GitHub</a>
+      <a class="btn btn-ghost" href="https://github.com/Jeffchoux/galaxia/wiki" target="_blank" rel="noopener">Read the docs →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── footer ─────────────────────────────────────── -->
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div class="foot-col">
+        <a href="#" class="logo" style="margin-bottom:.8rem">
+          <span class="logo-mark" aria-hidden="true"></span>
+          GALAXIA <span class="logo-ver">v0.1</span>
+        </a>
+        <p class="foot-lede">An autonomous AI operator you can install, fork, and own. Built on free LLMs, shipped under MIT.</p>
+      </div>
+      <div class="foot-col">
+        <h5>Product</h5>
+        <a href="#how">How it works</a>
+        <a href="#agents">Agents</a>
+        <a href="#stack">Stack</a>
+        <a href="#pricing">Pricing</a>
+      </div>
+      <div class="foot-col">
+        <h5>Code</h5>
+        <a href="https://github.com/Jeffchoux/galaxia" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/Jeffchoux/galaxia/wiki" target="_blank" rel="noopener">Documentation</a>
+        <a href="https://github.com/Jeffchoux/galaxia/issues" target="_blank" rel="noopener">Issues</a>
+        <a href="https://github.com/Jeffchoux/galaxia/releases" target="_blank" rel="noopener">Releases</a>
+      </div>
+      <div class="foot-col">
+        <h5>Contact</h5>
+        <a href="https://github.com/Jeffchoux" target="_blank" rel="noopener">@Jeffchoux</a>
+        <a href="mailto:jeffchoux@hotmail.com">Email</a>
+      </div>
+    </div>
+    <div class="foot-bar">
+      <span>© 2026 GALAXIA · MIT license</span>
+      <span>Built by <a href="https://github.com/Jeffchoux" target="_blank" rel="noopener">Jeff Choux</a> on ai-deskflow.com</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// copy command
+function copyCmd(btn,cmd){
+  navigator.clipboard.writeText(cmd).then(()=>{
+    const prev=btn.textContent;
+    btn.textContent='COPIED';
+    btn.style.color='#9FEB5C';btn.style.borderColor='rgba(159,235,92,.3)';
+    setTimeout(()=>{btn.textContent=prev;btn.style.color='';btn.style.borderColor=''},1400);
+  }).catch(()=>{});
 }
-</script>
-<script type="module">
+function openWaitlist(){window.open('https://github.com/Jeffchoux/galaxia','_blank','noopener')}
 
-import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+// reveal on scroll
+const io=new IntersectionObserver((es)=>{
+  es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('on');io.unobserve(e.target)}})
+},{threshold:.12,rootMargin:'0px 0px -40px 0px'});
+document.querySelectorAll('.rev').forEach(el=>io.observe(el));
 
-// ═══════════════ GPU TIER DETECTION ═══════════════
-function detectTier() {
-  const isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile/i.test(navigator.userAgent);
-  if (isMobile) return 'mobile';
-  const tc = document.createElement('canvas');
-  const gl = tc.getContext('webgl2') || tc.getContext('webgl');
-  if (!gl) return 'mobile';
-  // Benchmark: render 10K points for 10 frames
-  const vertices = new Float32Array(30000);
-  for (let i = 0; i < 30000; i++) vertices[i] = Math.random() * 2 - 1;
-  const vs = 'attribute vec3 p;void main(){gl_PointSize=1.0;gl_Position=vec4(p,1.0);}';
-  const fs = 'precision lowp float;void main(){gl_FragColor=vec4(1.0);}';
-  const vS = gl.createShader(gl.VERTEX_SHADER); gl.shaderSource(vS, vs); gl.compileShader(vS);
-  const fS = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(fS, fs); gl.compileShader(fS);
-  const prog = gl.createProgram(); gl.attachShader(prog, vS); gl.attachShader(prog, fS); gl.linkProgram(prog); gl.useProgram(prog);
-  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0);
-  // Warm-up passes
-  for (let i = 0; i < 3; i++) { gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.POINTS, 0, 10000); }
-  gl.finish();
-  const t0 = performance.now();
-  for (let i = 0; i < 10; i++) { gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.POINTS, 0, 10000); }
-  gl.finish();
-  const avg = (performance.now() - t0) / 10;
-  gl.deleteBuffer(buf); gl.deleteProgram(prog); gl.deleteShader(vS); gl.deleteShader(fS); tc.remove();
-  if (avg < 8) return 'full';
-  if (avg < 16) return 'light';
-  return 'mobile';
-}
-
-const TIER = detectTier();
-console.log(`GALAXIA: Running in ${TIER} mode`);
-
-const TIER_CONFIG = {
-  full:   { particles: 50000, bloom: true,  attraction: true  },
-  light:  { particles: 10000, bloom: false, attraction: false },
-  mobile: { particles: 2000,  bloom: false, attraction: false }
-};
-const CONFIG = TIER_CONFIG[TIER];
-
-// ═══════════════ COPY CODE HELPER ═══════════════
-function copyCode(btn, text) {
-  navigator.clipboard.writeText(text).then(() => {
-    btn.textContent = 'COPIED';
-    setTimeout(() => btn.textContent = 'COPY', 2000);
+// rotating agent state (subtle live feel)
+const ROTATE=[
+  {name:'dev',states:['building','idle','building','reviewing']},
+  {name:'tasks',states:['dispatching','idle','queuing','dispatching']},
+  {name:'veille',states:['scanning','idle','ranking']},
+  {name:'controle',states:['watching','idle','patching']}
+];
+function rotateCrew(){
+  document.querySelectorAll('.crew-row').forEach(r=>{
+    const n=r.querySelector('.crew-name')?.textContent;
+    const match=ROTATE.find(x=>x.name===n);
+    if(!match)return;
+    const el=r.querySelector('.crew-state');
+    if(!el)return;
+    const cur=match.states[Math.floor(Math.random()*match.states.length)];
+    el.textContent=cur;
+    el.className='crew-state'+(cur==='idle'?' idle':cur.startsWith('build')||cur.startsWith('dispatch')||cur.startsWith('patch')?' work':'');
   });
 }
-window.copyCode = copyCode;
-
-// ═══════════════ NAV SCROLL ═══════════════
-const nav = document.getElementById('nav');
-window.addEventListener('scroll', () => {
-  if (window.scrollY > 60) nav.classList.add('scrolled');
-  else nav.classList.remove('scrolled');
-}, { passive: true });
-
-// ═══════════════ SCROLL REVEALS ═══════════════
-const revealObs = new IntersectionObserver((entries) => {
-  entries.forEach(e => {
-    if (e.isIntersecting) {
-      e.target.classList.add('vis');
-      revealObs.unobserve(e.target);
-    }
-  });
-}, { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
-document.querySelectorAll('.reveal').forEach(el => revealObs.observe(el));
-
-// ═══════════════ SMOOTH ANCHOR ═══════════════
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-  a.addEventListener('click', e => {
-    const t = document.querySelector(a.getAttribute('href'));
-    if (t) { e.preventDefault(); t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-  });
-});
-
-// ═══════════════ FORWARD DECLARATIONS (used by animation loop + event handlers) ═══════════════
-let audioCtx = null;
-let analyser = null;
-let freqData = null;
-let micActive = false;
-let handsModel = null;
-let cameraActive = false;
-let handLandmarks = null;
-let handFrameCount = 0;
-
-// ═══════════════ THREE.JS SCENE + PARTICLE VORTEX ═══════════════
-if (TIER !== 'mobile') {
-
-  // Enable pointer events on canvas for mouse interaction (Task 3)
-  document.getElementById('galaxy-canvas').style.pointerEvents = 'auto';
-
-  // ── Scene, Camera, Renderer ──
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.z = 5;
-
-  const renderer = new THREE.WebGLRenderer({
-    canvas: document.getElementById('galaxy-canvas'),
-    antialias: false,
-    alpha: true
-  });
-  renderer.setClearColor(0x06080F, 1);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-
-  // ── Post-processing (bloom) ──
-  let composer = null;
-  if (CONFIG.bloom) {
-    composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
-    const bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.8,   // strength
-      0.4,   // radius
-      0.85   // threshold
-    );
-    composer.addPass(bloomPass);
-  }
-
-  // ── Resize handler ──
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    if (composer) composer.setSize(window.innerWidth, window.innerHeight);
-  });
-
-  // ── Particle vortex geometry ──
-  const COUNT = CONFIG.particles;
-  const positions = new Float32Array(COUNT * 3);
-  const colors = new Float32Array(COUNT * 3);
-  const sizes = new Float32Array(COUNT);
-  const baseAngles = new Float32Array(COUNT);
-  const radii = new Float32Array(COUNT);
-  const speeds = new Float32Array(COUNT);
-  const zOffsets = new Float32Array(COUNT);
-
-  const goldColor = new THREE.Color(0xC9973E);
-  const tealColor = new THREE.Color(0x3EDBC6);
-  const whiteColor = new THREE.Color(0xF5F0E6);
-  const tmpColor = new THREE.Color();
-
-  for (let i = 0; i < COUNT; i++) {
-    const arm = Math.floor(Math.random() * 4);
-    const armAngle = (arm / 4) * Math.PI * 2;
-    const t = Math.random();
-    const r = 0.1 + Math.pow(t, 0.6) * 4.5;
-    const spiralAngle = armAngle + t * Math.PI * 3 + (Math.random() - 0.5) * 0.8;
-    const spread = (1 - t * 0.5) * 0.3;
-
-    const x = Math.cos(spiralAngle) * r + (Math.random() - 0.5) * spread;
-    const y = Math.sin(spiralAngle) * r + (Math.random() - 0.5) * spread;
-    const z = (Math.random() - 0.5) * 0.4 * (1 + r * 0.1);
-
-    positions[i * 3] = x;
-    positions[i * 3 + 1] = y;
-    positions[i * 3 + 2] = z;
-
-    // Color gradient: gold center → teal mid → white edges
-    if (t < 0.5) {
-      tmpColor.copy(goldColor).lerp(tealColor, t * 2);
-    } else {
-      tmpColor.copy(tealColor).lerp(whiteColor, (t - 0.5) * 2);
-    }
-    colors[i * 3] = tmpColor.r;
-    colors[i * 3 + 1] = tmpColor.g;
-    colors[i * 3 + 2] = tmpColor.b;
-
-    // Sizes: larger at center, smaller at edges
-    sizes[i] = Math.max(0.5, (1 - t) * 3.0 + Math.random() * 0.5);
-
-    // Orbital data
-    baseAngles[i] = spiralAngle;
-    radii[i] = r;
-    speeds[i] = 0.02 / (0.5 + r);
-    zOffsets[i] = z;
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-  const posAttr = geometry.getAttribute('position');
-
-  // ── Custom shader material ──
-  const particleMaterial = new THREE.ShaderMaterial({
-    vertexColors: true,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    uniforms: {},
-    vertexShader: `
-      attribute float size;
-      varying vec3 vColor;
-      void main() {
-        vColor = color;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = size * (200.0 / -mvPosition.z);
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `,
-    fragmentShader: `
-      varying vec3 vColor;
-      void main() {
-        float d = length(gl_PointCoord - vec2(0.5));
-        if (d > 0.5) discard;
-        float alpha = 1.0 - smoothstep(0.0, 0.5, d);
-        gl_FragColor = vec4(vColor, alpha * 0.8);
-      }
-    `
-  });
-
-  const particles = new THREE.Points(geometry, particleMaterial);
-  scene.add(particles);
-
-  // ── Central core ──
-  const coreMaterial = new THREE.MeshBasicMaterial({
-    color: 0xE8B94A,
-    transparent: true,
-    opacity: 0.85
-  });
-  const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.08, 16, 16),
-    coreMaterial
-  );
-  scene.add(core);
-
-  // ══════════ MOUSE INTERACTION ══════════
-  const mouse = new THREE.Vector2(9999, 9999);
-  const mouseWorld = new THREE.Vector3();
-  const raycaster = new THREE.Raycaster();
-  const intersectPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-
-  document.getElementById('galaxy-canvas').addEventListener('mousemove', (e) => {
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-    raycaster.ray.intersectPlane(intersectPlane, mouseWorld);
-  }, { passive: true });
-
-  document.getElementById('galaxy-canvas').addEventListener('mouseleave', () => {
-    mouse.set(9999, 9999);
-    mouseWorld.set(9999, 9999, 0);
-  });
-
-  // ══════════ AGENT STARS ══════════
-  const AGENTS = [
-    { name: 'Dev', role: 'Engineer', desc: 'Writes code, implements features, fixes bugs autonomously.', r: 0.6, angle: 0, color: 0xE8B94A, size: 0.06 },
-    { name: 'CI/CD', role: 'DevOps', desc: 'Tests, builds, deploys. Rolls back on failure.', r: 1.8, angle: 0.5, color: 0xC9973E, size: 0.04 },
-    { name: 'Test', role: 'QA', desc: 'Writes and runs tests. Catches bugs before prod.', r: 2.2, angle: 1.2, color: 0xC9973E, size: 0.04 },
-    { name: 'Review', role: 'Code Review', desc: 'Reviews every change for quality and best practices.', r: 2.5, angle: 2.0, color: 0xC9973E, size: 0.04 },
-    { name: 'Analyse', role: 'Data', desc: 'Tracks performance, finds N+1 queries, profiles resources.', r: 1.5, angle: 3.5, color: 0x3EDBC6, size: 0.04 },
-    { name: 'Controle', role: 'Security', desc: 'SSL audit, firewall, dependency vulnerabilities.', r: 2.0, angle: 4.2, color: 0x3EDBC6, size: 0.04 },
-    { name: 'Maintenance', role: 'SRE', desc: 'Updates deps, optimizes perf, keeps everything running.', r: 2.8, angle: 4.8, color: 0x3EDBC6, size: 0.035 },
-    { name: 'Veille', role: 'Research', desc: 'Tracks AI trends, emerging tools, GitHub stars.', r: 2.0, angle: -1.5, color: 0xF5F0E6, size: 0.04 },
-    { name: 'Ideas', role: 'Product', desc: 'Generates features based on usage and market trends.', r: 1.3, angle: -2.2, color: 0xF5F0E6, size: 0.04 },
-    { name: 'Contenu', role: 'Content', desc: 'UX copy, SEO content, onboarding flows that convert.', r: 1.7, angle: -0.8, color: 0xF5F0E6, size: 0.04 },
-  ];
-
-  const agentMeshes = [];
-  const agentGroup = new THREE.Group();
-
-  AGENTS.forEach((agent, idx) => {
-    const geo = new THREE.SphereGeometry(agent.size, 12, 12);
-    const mat = new THREE.MeshBasicMaterial({ color: agent.color, transparent: true, opacity: 0.95 });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(Math.cos(agent.angle) * agent.r, Math.sin(agent.angle) * agent.r, 0);
-    mesh.userData = { agent, index: idx };
-    agentGroup.add(mesh);
-    agentMeshes.push(mesh);
-
-    // Glow ring
-    const glowGeo = new THREE.RingGeometry(agent.size * 1.5, agent.size * 2.5, 24);
-    const glowMat = new THREE.MeshBasicMaterial({ color: agent.color, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
-    const glow = new THREE.Mesh(glowGeo, glowMat);
-    glow.position.copy(mesh.position);
-    agentGroup.add(glow);
-    mesh.userData.glow = glow;
-  });
-  scene.add(agentGroup);
-
-  // HTML labels
-  const labelsContainer = document.getElementById('agent-labels');
-  const labelElements = AGENTS.map(agent => {
-    const el = document.createElement('div');
-    el.className = 'agent-label';
-    el.innerHTML = `<h4>${agent.name}</h4><div class="role">${agent.role}</div><p>${agent.desc}</p>`;
-    labelsContainer.appendChild(el);
-    return el;
-  });
-
-  // ── Animation loop ──
-  const clock = new THREE.Clock();
-
-  function animate() {
-    requestAnimationFrame(animate);
-    const elapsed = clock.getElapsedTime();
-
-    // Update particle positions (orbital animation + mouse attraction)
-    for (let i = 0; i < COUNT; i++) {
-      const r = radii[i];
-      const angle = baseAngles[i] + elapsed * speeds[i];
-      let tx = Math.cos(angle) * r;
-      let ty = Math.sin(angle) * r;
-      let tz = zOffsets[i] + Math.sin(elapsed * 0.5 + r) * 0.02;
-
-      // Mouse attraction (full tier only)
-      if (CONFIG.attraction && mouseWorld.x < 100) {
-        const dx = mouseWorld.x - tx;
-        const dy = mouseWorld.y - ty;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 1.5 && dist > 0.01) {
-          const force = Math.min(0.15 / (dist * dist + 0.1), 0.4);
-          tx += dx * force;
-          ty += dy * force;
-          tz += (Math.random() - 0.5) * force * 0.2;
-        }
-      }
-
-      // Smooth lerp for trailing effect
-      posAttr.array[i * 3] += (tx - posAttr.array[i * 3]) * 0.08;
-      posAttr.array[i * 3 + 1] += (ty - posAttr.array[i * 3 + 1]) * 0.08;
-      posAttr.array[i * 3 + 2] += (tz - posAttr.array[i * 3 + 2]) * 0.08;
-    }
-    posAttr.needsUpdate = true;
-
-    // ══════════ AGENT STARS: orbit + label projection + hover ══════════
-    const tempV = new THREE.Vector3();
-    agentMeshes.forEach((mesh, idx) => {
-      const agent = AGENTS[idx];
-      const orbitAngle = agent.angle + elapsed * 0.05;
-      mesh.position.set(Math.cos(orbitAngle) * agent.r, Math.sin(orbitAngle) * agent.r, 0);
-      mesh.userData.glow.position.copy(mesh.position);
-      mesh.userData.glow.material.opacity = 0.1 + Math.sin(elapsed * 2 + idx) * 0.05;
-
-      // Project to screen
-      tempV.copy(mesh.position).project(camera);
-      const sx = (tempV.x * 0.5 + 0.5) * window.innerWidth;
-      const sy = (-tempV.y * 0.5 + 0.5) * window.innerHeight;
-      labelElements[idx].style.left = sx + 'px';
-      labelElements[idx].style.top = (sy - 20) + 'px';
-    });
-
-    // Hover detection
-    if (mouse.x < 100) {
-      raycaster.setFromCamera(mouse, camera);
-      const hits = raycaster.intersectObjects(agentMeshes);
-      agentMeshes.forEach((m, i) => labelElements[i].classList.remove('visible'));
-      if (hits.length > 0) {
-        const idx = hits[0].object.userData.index;
-        labelElements[idx].classList.add('visible');
-        document.body.style.cursor = 'pointer';
-      } else {
-        document.body.style.cursor = 'default';
-      }
-    }
-
-    // ══════════ VOICE → PARTICLE VIBRATION ══════════
-    let audioEnergy = 0, bassEnergy = 0, trebleEnergy = 0;
-    if (micActive && analyser) {
-      analyser.getByteFrequencyData(freqData);
-      const bins = freqData.length;
-      for (let b = 0; b < bins / 4; b++) bassEnergy += freqData[b];
-      bassEnergy = bassEnergy / (bins / 4) / 255;
-      for (let b = bins * 3 / 4; b < bins; b++) trebleEnergy += freqData[b];
-      trebleEnergy = trebleEnergy / (bins / 4) / 255;
-      for (let b = 0; b < bins; b++) audioEnergy += freqData[b];
-      audioEnergy = audioEnergy / bins / 255;
-
-      for (let i = 0; i < COUNT; i++) {
-        const r = radii[i];
-        const bassWave = Math.sin(elapsed * 2 + r * 1.5) * bassEnergy * 0.3;
-        const trebleRipple = Math.sin(elapsed * 8 + i * 0.01) * trebleEnergy * 0.08;
-        posAttr.array[i * 3] += bassWave * Math.cos(baseAngles[i]);
-        posAttr.array[i * 3 + 1] += bassWave * Math.sin(baseAngles[i]);
-        posAttr.array[i * 3 + 2] += trebleRipple;
-      }
-      micBtn.style.boxShadow = `0 0 ${20 + audioEnergy * 40}px rgba(201,151,62,${0.2 + audioEnergy * 0.5})`;
-    }
-
-    // Waveform drawing
-    if (micActive && analyser) {
-      const waveCanvas = document.getElementById('mic-wave');
-      const wCtx = waveCanvas.getContext('2d');
-      wCtx.clearRect(0, 0, 60, 20);
-      wCtx.strokeStyle = 'rgba(201,151,62,0.6)';
-      wCtx.lineWidth = 1;
-      wCtx.beginPath();
-      const timeData = new Uint8Array(analyser.fftSize);
-      analyser.getByteTimeDomainData(timeData);
-      const sliceW = 60 / timeData.length;
-      for (let j = 0; j < timeData.length; j++) {
-        const v = timeData[j] / 128.0;
-        const y2 = (v * 20) / 2;
-        if (j === 0) wCtx.moveTo(0, y2); else wCtx.lineTo(j * sliceW, y2);
-      }
-      wCtx.stroke();
-    }
-
-    // ══════════ HAND GESTURE → GALAXY CONTROL ══════════
-    if (cameraActive && handLandmarks) {
-      const gesture = detectGesture(handLandmarks);
-      if (gesture.type === 'palm') {
-        const rx = (gesture.x - 0.5) * 2;
-        const ry = (gesture.y - 0.5) * 2;
-        particles.rotation.y += rx * 0.01;
-        particles.rotation.x += ry * 0.01;
-        agentGroup.rotation.y = particles.rotation.y;
-        agentGroup.rotation.x = particles.rotation.x;
-      }
-      if (gesture.type === 'pinch') {
-        const targetZ = 3 + gesture.distance * 40;
-        camera.position.z += (targetZ - camera.position.z) * 0.05;
-      }
-      if (gesture.type === 'point') {
-        mouse.x = -(gesture.x * 2 - 1);
-        mouse.y = -(gesture.y * 2 - 1);
-        raycaster.setFromCamera(mouse, camera);
-        raycaster.ray.intersectPlane(intersectPlane, mouseWorld);
-        fingerCursor.style.left = ((1 - gesture.x) * window.innerWidth) + 'px';
-        fingerCursor.style.top = (gesture.y * window.innerHeight) + 'px';
-        fingerCursor.style.opacity = '1';
-      } else {
-        fingerCursor.style.opacity = '0';
-      }
-    }
-
-    // Subtle camera breathing
-    camera.position.z = 5 + Math.sin(elapsed * 0.3) * 0.1;
-
-    // Render
-    if (composer) {
-      composer.render();
-    } else {
-      renderer.render(scene, camera);
-    }
-  }
-
-  animate();
-
-} // end if (TIER !== 'mobile')
-
-// ══════════ MOBILE FALLBACK — CANVAS 2D ══════════
-if (TIER === 'mobile') {
-  const canvas = document.getElementById('galaxy-canvas');
-  const ctx = canvas.getContext('2d');
-  let W, H;
-
-  function resize() {
-    W = canvas.width = window.innerWidth;
-    H = canvas.height = window.innerHeight;
-  }
-
-  const STAR_COUNT = 2000;
-  const stars = [];
-  function createStars() {
-    stars.length = 0;
-    for (let i = 0; i < STAR_COUNT; i++) {
-      stars.push({
-        x: Math.random() * W, y: Math.random() * H,
-        r: Math.random() * 1.5 + 0.3, alpha: Math.random(),
-        speed: Math.random() * 0.0008 + 0.0002,
-        phase: Math.random() * Math.PI * 2,
-        depth: Math.random()
-      });
-    }
-  }
-
-  let touchX = 0, touchY = 0;
-  canvas.addEventListener('touchmove', (e) => {
-    touchX = e.touches[0].clientX - W / 2;
-    touchY = e.touches[0].clientY - H / 2;
-  }, { passive: true });
-
-  if (window.DeviceOrientationEvent) {
-    window.addEventListener('deviceorientation', (e) => {
-      if (e.gamma != null) touchX = (e.gamma / 45) * W * 0.1;
-      if (e.beta != null) touchY = ((e.beta - 45) / 45) * H * 0.1;
-    }, { passive: true });
-  }
-
-  function draw(t) {
-    ctx.clearRect(0, 0, W, H);
-    // Subtle nebula
-    const g1 = ctx.createRadialGradient(W * 0.4, H * 0.4, 0, W * 0.4, H * 0.4, W * 0.4);
-    g1.addColorStop(0, 'rgba(201,151,62,0.015)');
-    g1.addColorStop(1, 'transparent');
-    ctx.fillStyle = g1;
-    ctx.fillRect(0, 0, W, H);
-
-    for (const s of stars) {
-      const twinkle = (Math.sin(t * s.speed * 2 + s.phase) + 1) / 2;
-      const a = 0.15 + twinkle * s.alpha * 0.6;
-      const px = s.x + touchX * 0.01 * s.depth;
-      const py = s.y + touchY * 0.01 * s.depth;
-      const wx = ((px % W) + W) % W;
-      const wy = ((py % H) + H) % H;
-      ctx.fillStyle = s.depth > 0.7 ? `rgba(201,151,62,${a})` : `rgba(245,240,230,${a * 0.7})`;
-      ctx.beginPath();
-      ctx.arc(wx, wy, s.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    requestAnimationFrame(draw);
-  }
-
-  window.addEventListener('resize', () => { resize(); createStars(); });
-  resize();
-  createStars();
-  draw(0);
-
-  // Hide immersive interaction buttons on mobile
-  const micBtnEl = document.getElementById('mic-btn');
-  const camBtnEl = document.getElementById('cam-btn');
-  if (micBtnEl) micBtnEl.style.display = 'none';
-  if (camBtnEl) camBtnEl.style.display = 'none';
-  const subText = document.querySelector('.immersive-text-sub');
-  if (subText) subText.style.display = 'none';
-  const mainText = document.querySelector('.immersive-text-main');
-  if (mainText) mainText.textContent = 'Explore the Galaxy';
-  const micWaveEl = document.getElementById('mic-wave');
-  if (micWaveEl) micWaveEl.style.display = 'none';
-}
-
-// ══════════ WEB AUDIO — MIC → PARTICLES ══════════
-
-const micBtn = document.getElementById('mic-btn');
-
-micBtn.addEventListener('click', async () => {
-  if (micActive) {
-    micActive = false;
-    micBtn.classList.remove('active');
-    document.getElementById('mic-wave').style.display = 'none';
-    return;
-  }
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioCtx.createMediaStreamSource(stream);
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.8;
-    source.connect(analyser);
-    freqData = new Uint8Array(analyser.frequencyBinCount);
-    micActive = true;
-    micBtn.classList.add('active');
-    document.getElementById('mic-wave').style.display = 'block';
-  } catch (err) {
-    console.warn('Mic denied:', err);
-    micBtn.classList.add('denied');
-    micBtn.title = 'Micro non disponible';
-  }
-});
-
-// ══════════ MEDIAPIPE HAND TRACKING ══════════
-
-const camBtn = document.getElementById('cam-btn');
-const camPreview = document.getElementById('camera-preview');
-const camFeed = document.getElementById('camera-feed');
-const fingerCursor = document.getElementById('finger-cursor');
-
-camBtn.addEventListener('click', async () => {
-  if (cameraActive) {
-    cameraActive = false;
-    camBtn.classList.remove('active');
-    camPreview.style.display = 'none';
-    fingerCursor.style.display = 'none';
-    return;
-  }
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240, facingMode: 'user' } });
-    camFeed.srcObject = stream;
-    camPreview.style.display = 'block';
-
-    // Lazy load MediaPipe
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js';
-    script.onload = () => {
-      handsModel = new window.Hands({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`
-      });
-      handsModel.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-      handsModel.onResults((results) => {
-        handLandmarks = (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) ? results.multiHandLandmarks[0] : null;
-      });
-      cameraActive = true;
-      camBtn.classList.add('active');
-      fingerCursor.style.display = 'block';
-      processHandFrame();
-    };
-    document.head.appendChild(script);
-  } catch (err) {
-    console.warn('Camera/MediaPipe failed:', err);
-    camBtn.classList.add('denied');
-    camBtn.title = 'Camera non disponible';
-  }
-});
-
-async function processHandFrame() {
-  if (!cameraActive || !handsModel) return;
-  handFrameCount++;
-  if (handFrameCount % 3 === 0) {
-    await handsModel.send({ image: camFeed });
-  }
-  requestAnimationFrame(processHandFrame);
-}
-
-function detectGesture(landmarks) {
-  if (!landmarks) return { type: 'none' };
-  const tips = [4, 8, 12, 16, 20];
-  const pips = [3, 6, 10, 14, 18];
-  const extended = tips.map((tip, i) => {
-    if (i === 0) return Math.abs(landmarks[tip].x - landmarks[pips[i]].x) > 0.05;
-    return landmarks[tip].y < landmarks[pips[i]].y;
-  });
-  const thumbTip = landmarks[4], indexTip = landmarks[8];
-  const pinchDist = Math.sqrt((thumbTip.x - indexTip.x) ** 2 + (thumbTip.y - indexTip.y) ** 2);
-  if (pinchDist < 0.06) return { type: 'pinch', distance: pinchDist };
-  const onlyIndex = extended[1] && !extended[2] && !extended[3] && !extended[4];
-  if (onlyIndex) return { type: 'point', x: indexTip.x, y: indexTip.y };
-  if (extended.every(e => e)) return { type: 'palm', x: landmarks[9].x, y: landmarks[9].y };
-  return { type: 'none' };
-}
-
-// ══════════ HERO FADE ON SCROLL ══════════
-const heroContent = document.querySelector('.hero-content');
-if (heroContent) {
-  window.addEventListener('scroll', () => {
-    const scrolled = Math.min(window.scrollY / (window.innerHeight * 0.5), 1);
-    heroContent.style.opacity = String(1 - scrolled * 0.7);
-    heroContent.style.transform = `translateY(${scrolled * 30}px)`;
-  }, { passive: true });
-}
-
+setInterval(rotateCrew,3500);
 </script>
 </body>
 </html>

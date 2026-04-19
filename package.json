@@ -5,6 +5,7 @@
   "description": "GALAXIA - Your AI Company in a Box",
   "author": "Jeff Choux <jeffchoux@hotmail.com>",
   "license": "MIT",
+  "type": "module",
   "packageManager": "pnpm@9.15.4",
   "repository": {
     "type": "git",
