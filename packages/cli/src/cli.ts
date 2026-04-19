@@ -911,7 +911,12 @@ async function runDaemon(): Promise<void> {
   // the same daemon process. Loaded dynamically so that users who don't
   // build/install @galaxia/telegram still get a working daemon.
   let telegramBot: { stop(): Promise<void> } | null = null;
-  if (config.telegram?.enabled && config.telegram?.botToken && config.telegram?.allowedChatIds?.length) {
+  // Phase 7: accept either legacy `allowedChatIds` or the new `users[]`
+  // with at least one Telegram identity. server.ts re-checks, we just
+  // filter the obvious no-op case here.
+  const hasLegacy = (config.telegram?.allowedChatIds?.length ?? 0) > 0;
+  const hasUsers = (config.users ?? []).some((u) => (u.auth?.telegramChatIds ?? []).length > 0);
+  if (config.telegram?.enabled && config.telegram?.botToken && (hasLegacy || hasUsers)) {
     import('@galaxia/telegram')
       .then(async ({ startTelegramBot }) => {
         try {
@@ -926,7 +931,7 @@ async function runDaemon(): Promise<void> {
         daemonLog(`[telegram] import failed: ${err.message}`);
       });
   } else if (config.telegram?.enabled) {
-    daemonLog('[telegram] enabled in config but botToken or allowedChatIds missing — skipped');
+    daemonLog('[telegram] enabled in config but botToken missing or no telegram identities — skipped');
   }
 
   const shutdown = async (signal: string): Promise<void> => {

@@ -28,11 +28,38 @@ export interface Project {
   description?: string;
 }
 
+// Multi-user support — introduced in Phase 7. Each entry describes one
+// human (owner or collaborator) and how they authenticate, plus the scope
+// of projects they are allowed to see/act on. `scope: ['*']` grants access
+// to every project (used by the owner). A user with scope `[]` is a
+// "registered but inactive" user — useful when we know someone will join
+// later but their project isn't ready yet (e.g. Milan before learn-ai is
+// migrated).
+export type GalaxiaUserRole = 'owner' | 'collaborator';
+
+export interface GalaxiaUser {
+  name: string;
+  role: GalaxiaUserRole;
+  scope: string[];
+  auth: {
+    telegramChatIds?: (number | string)[];
+    // scrypt hash in the format `scrypt$<salt-hex>$<hash-hex>`. Verified
+    // by auth/auth.ts → verifyPassword(). Optional: a Telegram-only user
+    // can leave this unset.
+    webPasswordHash?: string;
+  };
+}
+
 export interface GalaxiaConfig {
   business: {
     name: string;
     description: string;
   };
+  // Multi-user (Phase 7). Optional for back-compat — when absent, the
+  // legacy `telegram.allowedChatIds` path still works as a single-owner
+  // shortcut.
+  owner?: string;
+  users?: GalaxiaUser[];
   llm: {
     light: LLMProviderConfig;
     medium: LLMProviderConfig;

@@ -10,7 +10,7 @@ import type { TelegramClient } from './client.js';
 import type { Router } from './router.js';
 import type { ConfirmationStore } from './confirmation.js';
 import type { TelegramUpdate } from './types.js';
-import { isAllowed } from './auth.js';
+import { findUser } from './auth.js';
 
 const INITIAL_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 60_000;
@@ -86,7 +86,7 @@ export class Poller {
       // Auth callback_query the same way as messages. Missing `message`
       // shouldn't happen for button clicks, but guard defensively.
       const chatId = q.message?.chat.id;
-      if (chatId === undefined || !isAllowed(chatId, config)) {
+      if (chatId === undefined || !findUser(chatId, config)) {
         // Silent drop, but still close the Telegram spinner on the client
         // side so their UI doesn't hang. We can safely answer an
         // unauthorised callback — it doesn't reveal whitelist membership

@@ -10,7 +10,7 @@ import type {
   TelegramMessage,
   TelegramClientLike,
 } from './types.js';
-import { isAllowed } from './auth.js';
+import { findUser } from './auth.js';
 import { resolveTimezone } from './format.js';
 import { ConfirmationStore } from './confirmation.js';
 import { handleStatus } from './handlers/status.js';
@@ -23,6 +23,7 @@ import { handleAudit } from './handlers/audit.js';
 import { handleLogs } from './handlers/logs.js';
 import { handleHelp } from './handlers/help.js';
 import { handleFreetext } from './handlers/freetext.js';
+import { handleWhoami } from './handlers/whoami.js';
 
 export class Router {
   private readonly handlers: Map<string, (ctx: CommandContext) => Promise<void>>;
@@ -38,6 +39,7 @@ export class Router {
     this.handlers.set('/audit',    handleAudit);
     this.handlers.set('/logs',     handleLogs);
     this.handlers.set('/help',     handleHelp);
+    this.handlers.set('/whoami',   handleWhoami);
     // /start is the Telegram "first contact" convention — route to /help.
     this.handlers.set('/start',    handleHelp);
   }
@@ -49,7 +51,8 @@ export class Router {
   ): Promise<void> {
     // Auth gate — silent drop for non-whitelisted chats. See auth.ts: we
     // never send a "not authorised" message. A stranger gets nothing.
-    if (!isAllowed(message.chat.id, config)) {
+    const user = findUser(message.chat.id, config);
+    if (!user) {
       return;
     }
 
@@ -65,6 +68,7 @@ export class Router {
       client,
       tz: resolveTimezone(config.display?.timezone),
       message,
+      currentUser: user,
     };
 
     // Command path: first token that starts with '/'. Shell-style quoted

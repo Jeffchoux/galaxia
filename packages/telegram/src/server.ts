@@ -37,8 +37,13 @@ export async function startTelegramBot(
     log('no bot token configured — not starting');
     return { stop: async () => { /* noop */ } };
   }
-  if (!config.telegram.allowedChatIds || config.telegram.allowedChatIds.length === 0) {
-    log('allowedChatIds is empty — refusing to start (would be unreachable anyway)');
+  // Phase 7: accept either the legacy `telegram.allowedChatIds` whitelist
+  // or the new `config.users[]` multi-user block. Refuse to start only if
+  // BOTH are empty — the bot would be unreachable in that case.
+  const legacyIds = config.telegram.allowedChatIds ?? [];
+  const hasUsers = (config.users ?? []).some((u) => (u.auth?.telegramChatIds ?? []).length > 0);
+  if (legacyIds.length === 0 && !hasUsers) {
+    log('no telegram identities configured (users[] empty and allowedChatIds empty) — refusing to start');
     return { stop: async () => { /* noop */ } };
   }
 
@@ -55,7 +60,11 @@ export async function startTelegramBot(
   const router = new Router(confirmations);
   const poller = new Poller({ client, router, confirmations, config, log });
   poller.start();
-  log(`bot started — allowedChatIds=[${config.telegram.allowedChatIds.join(',')}]`);
+  const users = config.users ?? [];
+  const summary = users.length > 0
+    ? `users=[${users.map((u) => `${u.name}(${u.role},${u.scope.join('|')})`).join(',')}]`
+    : `allowedChatIds=[${legacyIds.join(',')}]`;
+  log(`bot started — ${summary}`);
 
   return {
     async stop() {

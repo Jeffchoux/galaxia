@@ -2,7 +2,7 @@
 // pulled from state.json (populated by runCycle).
 
 import { existsSync, readFileSync } from 'node:fs';
-import { stateFilePath } from '@galaxia/core';
+import { stateFilePath, userCanAccess } from '@galaxia/core';
 import type { CommandContext } from '../types.js';
 import { escapeMd2, timeSince } from '../format.js';
 
@@ -24,9 +24,16 @@ function loadProjects(dataDir: string): Record<string, ProjectState> {
 }
 
 export async function handleProjects(ctx: CommandContext): Promise<void> {
-  const projects = ctx.config.projects ?? [];
+  const allProjects = ctx.config.projects ?? [];
+  // Phase 7 — only expose projects that fall within the caller's scope.
+  // Users with scope='*' see everything; with scope=['learn-ai'] see only
+  // learn-ai; with scope=[] see nothing (treated as "aucun projet").
+  const projects = allProjects.filter((p) => userCanAccess(ctx.currentUser, p.name));
   if (projects.length === 0) {
-    await ctx.client.sendMessage(ctx.chatId, escapeMd2('Aucun projet configuré dans galaxia.yml.'), {
+    const msg = allProjects.length === 0
+      ? 'Aucun projet configuré dans galaxia.yml.'
+      : 'Aucun projet accessible pour votre scope.';
+    await ctx.client.sendMessage(ctx.chatId, escapeMd2(msg), {
       parse_mode: 'MarkdownV2',
     });
     return;

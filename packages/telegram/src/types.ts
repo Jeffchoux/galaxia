@@ -1,6 +1,6 @@
 // GALAXIA Telegram — shared types for the bidirectional bot (Pilier 3).
 
-import type { GalaxiaConfig } from '@galaxia/core';
+import type { GalaxiaConfig, GalaxiaUser } from '@galaxia/core';
 
 // ── Telegram Bot API shapes (minimal subset) ───────────────────────────────
 // We only model fields we actually read. Keep unknown-shape for fields we
@@ -84,6 +84,10 @@ export interface CommandContext {
   // The full Telegram message, exposed for handlers that need metadata we
   // didn't bubble up (e.g. username for logging).
   message: TelegramMessage;
+  // Phase 7 — the authenticated user behind this chat_id. Populated by the
+  // router before it calls the handler. Handlers rely on this for scope
+  // checks; see packages/core/src/auth.
+  currentUser: GalaxiaUser;
 }
 
 // Subset of the full TelegramClient the handlers depend on. Keeps the

@@ -8,6 +8,8 @@ export type {
   ProjectStatus,
   MissionStatus,
   GalaxiaConfig,
+  GalaxiaUser,
+  GalaxiaUserRole,
   Project,
   LLMProviderConfig,
   AgentAction,
@@ -70,3 +72,18 @@ export {
   queryAudit,
   validateRules,
 } from './routing/index.js';
+
+// Auth (Phase 7 — multi-user with scope)
+export {
+  userCanAccess,
+  findUserByTelegramChatId,
+  authenticateUser,
+  authenticateByPassword,
+  hashPassword,
+  verifyPassword,
+  requireScope,
+  requireOwner,
+  isOwner,
+  ScopeError,
+  OwnerOnlyError,
+} from './auth/index.js';
