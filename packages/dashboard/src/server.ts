@@ -29,6 +29,7 @@ import {
 import {
   handleGetState, handleGetProjects, handleGetAudit,
   handleGetMissions, handleGetUsers, handleGetMe, handleGetBrain,
+  handlePostChat, handleGetChatHistory, handlePostChatUpload,
   writeJSON, type RouteContext,
 } from './routes.js';
 
@@ -179,7 +180,10 @@ export function startDashboard(options: StartDashboardOptions | number = {}, leg
       if (urlPath === '/api/audit'     && req.method === 'GET')  { handleGetAudit(req, res, ctx); return; }
       if (urlPath === '/api/missions'  && req.method === 'GET')  { handleGetMissions(req, res, ctx); return; }
       if (urlPath === '/api/users'     && req.method === 'GET')  { handleGetUsers(req, res, ctx); return; }
-      if (urlPath === '/api/brain'     && req.method === 'GET')  { handleGetBrain(req, res, ctx); return; }
+      if (urlPath === '/api/brain'         && req.method === 'GET')  { handleGetBrain(req, res, ctx); return; }
+      if (urlPath === '/api/chat'          && req.method === 'POST') { await handlePostChat(req, res, ctx); return; }
+      if (urlPath === '/api/chat/history'  && req.method === 'GET')  { handleGetChatHistory(req, res, ctx); return; }
+      if (urlPath === '/api/chat/upload'    && req.method === 'POST') { await handlePostChatUpload(req, res, ctx); return; }
     }
 
     // ── Legacy 3D dashboard ──

@@ -5,7 +5,9 @@
 // 401 when ctx.user is null. Scope is applied per-route (collaborators
 // only see their projects in /api/projects etc.).
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, appendFileSync, writeFileSync, statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { GalaxiaConfig, GalaxiaUser } from '@galaxia/core';
 import {
@@ -15,6 +17,7 @@ import {
   routingAuditPath,
   missionsFilePath,
   loadGMState,
+  callLLM,
 } from '@galaxia/core';
 
 export interface RouteContext {
@@ -176,4 +179,263 @@ export function handleGetBrain(_req: IncomingMessage, res: ServerResponse, ctx: 
     };
   }
   writeJSON(res, 200, { projects });
+}
+
+// ── Chat (conversation persistée par user) ────────────────────────────────
+// POST /api/chat  { message }
+// GET  /api/chat/history?n=200
+//
+// La conversation est routée via callLLM avec dataClass='personal' +
+// taskType='analysis' (même chemin que le freetext Telegram), donc les
+// règles de routage existantes s'appliquent. Persistance en JSONL sous
+// memory/chat/<userName>.jsonl pour que la conversation survive aux
+// restarts et reste isolée par user (scope).
+
+interface ChatAttachment {
+  id: string;                   // uuid used in storage filename
+  name: string;                 // original filename (sanitized)
+  size: number;
+  mime: string;
+  storedAt: string;             // absolute path under memory/chat-uploads/<user>/
+}
+
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  text: string;
+  ts: string;
+  attachments?: ChatAttachment[];
+  meta?: {
+    provider?: string;
+    model?: string;
+    transport?: string;
+    matchedRule?: string;
+    durationMs?: number;
+  };
+}
+
+function chatPath(dataDir: string, userName: string): string {
+  // Slug the user name (paranoid against `../` even though config-controlled).
+  const safe = userName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return join(dataDir, 'memory', 'chat', `${safe}.jsonl`);
+}
+
+function loadChatHistory(dataDir: string, userName: string, n: number): ChatMessage[] {
+  const p = chatPath(dataDir, userName);
+  if (!existsSync(p)) return [];
+  try {
+    const raw = readFileSync(p, 'utf-8');
+    const lines = raw.split('\n').filter(Boolean);
+    const out: ChatMessage[] = [];
+    for (const line of lines.slice(-Math.max(n, 1))) {
+      try { out.push(JSON.parse(line) as ChatMessage); } catch { /* skip */ }
+    }
+    return out;
+  } catch { return []; }
+}
+
+function appendChatMessage(dataDir: string, userName: string, msg: ChatMessage): void {
+  const p = chatPath(dataDir, userName);
+  mkdirSync(dirname(p), { recursive: true });
+  appendFileSync(p, JSON.stringify(msg) + '\n', 'utf-8');
+}
+
+// ── Chat attachments (upload + read) ──────────────────────────────────────
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;     // 10 MiB per file
+const ATTACH_TEXT_INLINE_MAX = 30 * 1024;      // cap text content fed to the LLM
+const ATTACH_COUNT_IN_PROMPT = 3;              // at most N attachments expanded inline per message
+
+function userChatUploadDir(dataDir: string, userName: string): string {
+  const safe = userName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return join(dataDir, 'memory', 'chat-uploads', safe);
+}
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100) || 'file.bin';
+}
+
+function isTextLikeMime(mime: string, filename: string): boolean {
+  if (mime.startsWith('text/')) return true;
+  if (mime === 'application/json') return true;
+  if (mime === 'application/xml') return true;
+  if (mime === 'application/yaml' || mime === 'text/yaml') return true;
+  if (/\.(md|txt|ts|tsx|js|jsx|json|yaml|yml|html|css|scss|sql|py|rs|go|sh|env\.example|spec)$/.test(filename.toLowerCase())) return true;
+  return false;
+}
+
+export async function handlePostChatUpload(req: IncomingMessage, res: ServerResponse, ctx: RouteContext): Promise<void> {
+  if (!requireAuth(res, ctx.user)) return;
+  const user = ctx.user!;
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const name = sanitizeFilename(url.searchParams.get('name') ?? 'upload.bin');
+  const mime = (req.headers['content-type'] as string) || 'application/octet-stream';
+
+  // Stream the body with a hard size cap (protects disk + memory).
+  const chunks: Buffer[] = [];
+  let total = 0;
+  try {
+    for await (const chunk of req as AsyncIterable<Buffer>) {
+      total += chunk.length;
+      if (total > MAX_UPLOAD_BYTES) {
+        writeJSON(res, 413, { error: 'file too large', maxBytes: MAX_UPLOAD_BYTES });
+        return;
+      }
+      chunks.push(chunk);
+    }
+  } catch (err) {
+    writeJSON(res, 400, { error: `read error: ${(err as Error).message}` });
+    return;
+  }
+  const buf = Buffer.concat(chunks);
+
+  const id = randomUUID();
+  const dir = userChatUploadDir(ctx.config.dataDir, user.name);
+  mkdirSync(dir, { recursive: true });
+  const storedAt = join(dir, `${id}-${name}`);
+  writeFileSync(storedAt, buf);
+
+  const attachment: ChatAttachment = { id, name, size: buf.length, mime, storedAt };
+  writeJSON(res, 200, { attachment });
+}
+
+function readAttachmentSafely(att: ChatAttachment, user: GalaxiaUser, dataDir: string): { content: string | null; truncated: boolean; reason?: string } {
+  // Revalidate path: must be inside the user's upload dir. This prevents
+  // a malicious client from sending a spoofed `storedAt` pointing at
+  // /etc/passwd or another user's files.
+  const expectedPrefix = userChatUploadDir(dataDir, user.name) + '/';
+  if (!att.storedAt.startsWith(expectedPrefix)) {
+    return { content: null, truncated: false, reason: 'path mismatch' };
+  }
+  if (!existsSync(att.storedAt)) return { content: null, truncated: false, reason: 'not found' };
+  if (!isTextLikeMime(att.mime, att.name)) return { content: null, truncated: false, reason: 'binary' };
+  try {
+    const buf = readFileSync(att.storedAt);
+    const truncated = buf.byteLength > ATTACH_TEXT_INLINE_MAX;
+    const slice = truncated ? buf.subarray(0, ATTACH_TEXT_INLINE_MAX) : buf;
+    return { content: slice.toString('utf-8'), truncated };
+  } catch (err) {
+    return { content: null, truncated: false, reason: (err as Error).message };
+  }
+}
+
+function buildAttachmentPromptBlock(attachments: ChatAttachment[], user: GalaxiaUser, dataDir: string): string {
+  if (!attachments || attachments.length === 0) return '';
+  const lines: string[] = ['', '---', 'Fichiers joints par l\'utilisateur :', ''];
+  let expanded = 0;
+  for (const att of attachments) {
+    const sizeKb = (att.size / 1024).toFixed(1);
+    if (expanded >= ATTACH_COUNT_IN_PROMPT) {
+      lines.push(`- ${att.name} (${att.mime}, ${sizeKb} KiB) — [non chargé dans la fenêtre de contexte]`);
+      continue;
+    }
+    const read = readAttachmentSafely(att, user, dataDir);
+    if (read.content === null) {
+      lines.push(`- ${att.name} (${att.mime}, ${sizeKb} KiB) — [${read.reason ?? 'non lisible'}]`);
+      continue;
+    }
+    const suffix = read.truncated ? ` (tronqué à ${ATTACH_TEXT_INLINE_MAX} octets)` : '';
+    lines.push(`### ${att.name}${suffix}`);
+    lines.push('```');
+    lines.push(read.content);
+    lines.push('```');
+    expanded++;
+  }
+  return lines.join('\n');
+}
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolveP, reject) => {
+    let data = '';
+    req.on('data', (c: Buffer) => { data += c.toString('utf-8'); if (data.length > 200_000) reject(new Error('payload too large')); });
+    req.on('end', () => resolveP(data));
+    req.on('error', reject);
+  });
+}
+
+const CHAT_SYSTEM = [
+  'Tu es Galaxia — l\'IA personnelle de ton propriétaire, tournant en daemon 24/7 sur son VPS.',
+  'Tu parles en français (ou en anglais si on s\'adresse à toi en anglais).',
+  'Tu connais la structure Galaxia : des pièces (projets) dans /opt/galaxia/projects/, chaque pièce a un General Manager IA, un action runner surface v1 à 8 kinds, un routage par dataClass/taskType.',
+  'Tu réponds concis, direct. Pas de préambule ni de flatterie. Quand l\'utilisateur demande une action qui nécessiterait l\'action runner, suggère-lui /plan <agent> "<task>" depuis le dashboard ou Telegram.',
+  'Tu n\'as pas encore la capacité d\'exécuter des outils depuis ce canal (v1). Ton rôle ici c\'est : conseiller, analyser, répondre, aider à réfléchir.',
+].join(' ');
+
+export async function handlePostChat(req: IncomingMessage, res: ServerResponse, ctx: RouteContext): Promise<void> {
+  if (!requireAuth(res, ctx.user)) return;
+  let body: { message?: string; attachments?: ChatAttachment[] };
+  try {
+    const raw = await readBody(req);
+    body = JSON.parse(raw) as { message?: string; attachments?: ChatAttachment[] };
+  } catch (err) {
+    writeJSON(res, 400, { error: `bad request: ${(err as Error).message}` });
+    return;
+  }
+  const text = (body.message ?? '').trim();
+  const attachments = Array.isArray(body.attachments) ? body.attachments : [];
+  if (!text && attachments.length === 0) { writeJSON(res, 400, { error: 'empty message' }); return; }
+  if (text.length > 10_000) { writeJSON(res, 413, { error: 'message too long (10k max)' }); return; }
+
+  const user = ctx.user!;
+  const now = new Date().toISOString();
+
+  // Append the user message immediately so a crash after LLM call still keeps it.
+  const userMsg: ChatMessage = { id: randomUUID(), role: 'user', text, ts: now, attachments: attachments.length ? attachments : undefined };
+  appendChatMessage(ctx.config.dataDir, user.name, userMsg);
+
+  // Build a light conversation window — last 20 messages prepended to the prompt.
+  const history = loadChatHistory(ctx.config.dataDir, user.name, 20);
+  const historyBlock = history
+    .filter((m) => m.role !== 'system')
+    .map((m) => {
+      const attSummary = (m.attachments ?? []).length > 0
+        ? ` [+ ${m.attachments!.length} fichier(s) joint(s)]`
+        : '';
+      return `${m.role === 'user' ? 'USER' : 'GALAXIA'}${attSummary}: ${m.text}`;
+    })
+    .join('\n\n');
+  const attachBlock = buildAttachmentPromptBlock(attachments, user, ctx.config.dataDir);
+  const prompt = `${CHAT_SYSTEM}\n\nConversation récente:\n${historyBlock}\n${attachBlock}\n\nRéponds à ce dernier message USER.`;
+
+  try {
+    const started = Date.now();
+    const result = await callLLM(
+      { dataClass: 'personal', taskType: 'dashboard-chat' },
+      prompt,
+      ctx.config,
+    );
+    const durationMs = Date.now() - started;
+    const assistantMsg: ChatMessage = {
+      id: randomUUID(),
+      role: 'assistant',
+      text: result.text,
+      ts: new Date().toISOString(),
+      meta: {
+        provider:    result.decision.provider,
+        model:       result.decision.model,
+        transport:   result.decision.transport ?? undefined,
+        matchedRule: result.decision.matchedRule,
+        durationMs,
+      },
+    };
+    appendChatMessage(ctx.config.dataDir, user.name, assistantMsg);
+    writeJSON(res, 200, { userMessage: userMsg, assistantMessage: assistantMsg });
+  } catch (err) {
+    const errMsg: ChatMessage = {
+      id: randomUUID(),
+      role: 'system',
+      text: `LLM error: ${(err as Error).message}`,
+      ts: new Date().toISOString(),
+    };
+    appendChatMessage(ctx.config.dataDir, user.name, errMsg);
+    writeJSON(res, 500, { userMessage: userMsg, assistantMessage: errMsg, error: (err as Error).message });
+  }
+}
+
+export function handleGetChatHistory(req: IncomingMessage, res: ServerResponse, ctx: RouteContext): void {
+  if (!requireAuth(res, ctx.user)) return;
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const n = Math.min(500, Math.max(1, Number(url.searchParams.get('n') ?? '100')));
+  const messages = loadChatHistory(ctx.config.dataDir, ctx.user!.name, n);
+  writeJSON(res, 200, { messages });
 }
