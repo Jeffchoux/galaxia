@@ -41,6 +41,34 @@
     .panel-3d .tooltip.on { opacity:1; }
     .panel-3d canvas { display:block; width:100%; height:100%; }
     @media (max-width: 768px) { .split-3d { grid-template-columns:1fr; height:auto; } .panel-3d { height:40vh; } }
+    /* Chat */
+    .chat-wrap { display:flex; flex-direction:column; height:calc(100vh - 180px); min-height:500px; background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+    .chat-log { flex:1 1 auto; overflow-y:auto; padding:1rem 1.2rem; }
+    .chat-log .turn { margin-bottom:1.1rem; max-width:80%; }
+    .chat-log .turn.user { margin-left:auto; text-align:right; }
+    .chat-log .turn .role { font-size:.7rem; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; margin-bottom:.25rem; }
+    .chat-log .turn .bubble { padding:.65rem .85rem; border-radius:10px; background:#0b0d10; border:1px solid var(--border); line-height:1.45; font-size:.93rem; white-space:pre-wrap; word-wrap:break-word; text-align:left; display:inline-block; max-width:100%; }
+    .chat-log .turn.user .bubble { background:#1a2a3a; border-color:#2a4a6a; color:#cdeaff; }
+    .chat-log .turn.assistant .bubble { background:#15181d; }
+    .chat-log .turn.system .bubble { background:#2a1a1a; border-color:#5a2a2a; color:#ff9090; font-size:.85rem; }
+    .chat-log .turn .meta { font-size:.7rem; color:var(--muted); margin-top:.25rem; }
+    .chat-input { display:flex; gap:.5rem; padding:.75rem; border-top:1px solid var(--border); background:#0b0d10; }
+    .chat-input textarea { flex:1; padding:.6rem .8rem; background:#15181d; color:var(--fg); border:1px solid var(--border); border-radius:6px; font-family:inherit; font-size:.95rem; resize:none; min-height:46px; max-height:180px; }
+    .chat-input textarea:focus { outline:none; border-color:var(--accent); }
+    .chat-input button { padding:.6rem 1.1rem; background:var(--accent); color:#000; border:none; border-radius:6px; font-weight:600; cursor:pointer; font-size:.9rem; }
+    .chat-input button:disabled { opacity:.5; cursor:not-allowed; }
+    .chat-log pre { white-space:pre-wrap; word-wrap:break-word; }
+    .chat-log code { background:#0b0d10; padding:.1rem .35rem; border-radius:4px; font-size:.85em; }
+    .chat-empty { text-align:center; color:var(--muted); padding:3rem 1rem; font-size:.95rem; }
+    .chat-attachments { display:flex; flex-wrap:wrap; gap:.3rem; padding:.5rem .75rem 0; background:#0b0d10; }
+    .chat-attachments:empty { display:none; }
+    .att-chip { display:inline-flex; align-items:center; gap:.4rem; padding:.2rem .5rem; background:#15181d; border:1px solid var(--border); border-radius:4px; font-size:.8rem; color:var(--fg); }
+    .att-chip.bubble-chip { background:rgba(20,30,40,.6); font-size:.75rem; margin-right:.3rem; }
+    .att-chip .x { cursor:pointer; color:var(--muted); font-size:.85rem; line-height:1; }
+    .att-chip .x:hover { color:var(--err); }
+    .att-btn { padding:.6rem .8rem; background:#15181d; color:var(--fg); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:.9rem; }
+    .att-btn:hover { border-color:var(--accent); }
+    .chat-log.dragover { outline:2px dashed var(--accent); outline-offset:-8px; background:rgba(102,204,255,.05); }
   </style>
   <script type="importmap">
   {
@@ -57,7 +85,8 @@
     <div class="user"><span id="user-info">Chargement…</span><a href="3d.html">Legacy 3D</a><a href="#" id="logout">Logout</a></div>
   </header>
   <nav>
-    <button class="active" data-tab="overview">Overview</button>
+    <button class="active" data-tab="chat">💬 Chat</button>
+    <button data-tab="overview">Overview</button>
     <button data-tab="projects">Projects</button>
     <button data-tab="audit">Audit</button>
     <button data-tab="missions">Missions</button>
@@ -592,7 +621,183 @@
         </tbody></table>`;
     }
 
+    // ────────────────────────────────────────────────────────────────────
+    //  Chat tab
+    // ────────────────────────────────────────────────────────────────────
+    async function renderChat() {
+      disposeActiveScenes();
+      view.innerHTML = `
+        <div class="chat-wrap">
+          <div class="chat-log" id="chat-log"></div>
+          <div class="chat-attachments" id="chat-attachments"></div>
+          <div class="chat-input">
+            <button class="att-btn" id="chat-attach" title="Joindre des fichiers">📎</button>
+            <input type="file" id="chat-file-input" multiple style="display:none">
+            <textarea id="chat-text" placeholder="Parle à Galaxia… (Entrée pour envoyer, Shift+Entrée = saut de ligne, glisser-déposer pour joindre)" autofocus></textarea>
+            <button id="chat-send">Envoyer</button>
+          </div>
+        </div>
+      `;
+      const log = document.getElementById('chat-log');
+      const input = document.getElementById('chat-text');
+      const sendBtn = document.getElementById('chat-send');
+      const attachBtn = document.getElementById('chat-attach');
+      const fileInput = document.getElementById('chat-file-input');
+      const attList = document.getElementById('chat-attachments');
+      let pendingAttachments = [];  // { id, name, size, mime, storedAt } from upload endpoint
+
+      function refreshAttChips() {
+        attList.innerHTML = pendingAttachments.map((a, i) => `
+          <span class="att-chip">📎 ${esc(a.name)} · ${(a.size/1024).toFixed(1)} KiB
+            <span class="x" data-idx="${i}">✕</span>
+          </span>
+        `).join('');
+        attList.querySelectorAll('.x').forEach(el => {
+          el.addEventListener('click', () => {
+            const idx = Number(el.dataset.idx);
+            pendingAttachments.splice(idx, 1);
+            refreshAttChips();
+          });
+        });
+      }
+
+      async function uploadFiles(files) {
+        const arr = Array.from(files);
+        if (arr.length === 0) return;
+        attachBtn.disabled = true;
+        for (const f of arr) {
+          try {
+            const res = await fetch('api/chat/upload?name=' + encodeURIComponent(f.name), {
+              method: 'POST',
+              headers: { 'Content-Type': f.type || 'application/octet-stream' },
+              body: f,
+            });
+            const data = await res.json();
+            if (data.attachment) pendingAttachments.push(data.attachment);
+            else appendTurn({ role:'system', text:`Upload ${f.name} échoué: ${data.error ?? res.status}`, ts:new Date().toISOString() });
+          } catch (err) {
+            appendTurn({ role:'system', text:`Upload ${f.name} échoué: ${err.message}`, ts:new Date().toISOString() });
+          }
+        }
+        attachBtn.disabled = false;
+        refreshAttChips();
+      }
+
+      attachBtn.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', (e) => { uploadFiles(e.target.files); e.target.value = ''; });
+      // Drag-drop on the log area.
+      ['dragenter','dragover'].forEach(ev => log.addEventListener(ev, (e) => { e.preventDefault(); log.classList.add('dragover'); }));
+      ['dragleave','drop'].forEach(ev => log.addEventListener(ev, (e) => { e.preventDefault(); log.classList.remove('dragover'); }));
+      log.addEventListener('drop', (e) => { if (e.dataTransfer?.files?.length) uploadFiles(e.dataTransfer.files); });
+
+      // Load recent history.
+      try {
+        const { messages } = await api('api/chat/history?n=200');
+        if (!messages || messages.length === 0) {
+          log.innerHTML = '<div class="chat-empty">Aucune conversation encore — envoie un message pour démarrer.</div>';
+        } else {
+          for (const m of messages) appendTurn(m);
+          scrollToBottom();
+        }
+      } catch (err) {
+        log.innerHTML = `<div class="chat-empty">Erreur chargement historique: ${esc(err.message)}</div>`;
+      }
+
+      async function sendMessage() {
+        const text = input.value.trim();
+        if (!text && pendingAttachments.length === 0) return;
+        const attsToSend = pendingAttachments.slice();
+        input.value = '';
+        input.style.height = 'auto';
+        pendingAttachments = [];
+        refreshAttChips();
+        sendBtn.disabled = true;
+
+        // Optimistic user bubble.
+        const tempUser = { id:'tmp-'+Date.now(), role:'user', text, ts:new Date().toISOString(), attachments: attsToSend };
+        if (log.querySelector('.chat-empty')) log.innerHTML = '';
+        appendTurn(tempUser);
+        // Placeholder thinking bubble.
+        const thinkingId = 'thinking-' + Date.now();
+        log.insertAdjacentHTML('beforeend', `
+          <div class="turn assistant" id="${thinkingId}">
+            <div class="role">Galaxia</div>
+            <div class="bubble" style="opacity:.7">⏳ réfléchit…</div>
+          </div>
+        `);
+        scrollToBottom();
+
+        try {
+          const res = await fetch('api/chat', {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ message: text, attachments: attsToSend }),
+          });
+          const data = await res.json();
+          document.getElementById(thinkingId)?.remove();
+          if (data.assistantMessage) appendTurn(data.assistantMessage);
+          else if (data.error) appendTurn({ role:'system', text:`Erreur: ${data.error}`, ts:new Date().toISOString() });
+        } catch (err) {
+          document.getElementById(thinkingId)?.remove();
+          appendTurn({ role:'system', text:`Erreur réseau: ${err.message}`, ts:new Date().toISOString() });
+        } finally {
+          sendBtn.disabled = false;
+          input.focus();
+          scrollToBottom();
+        }
+      }
+
+      sendBtn.addEventListener('click', sendMessage);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+      });
+      // Auto-grow textarea.
+      input.addEventListener('input', () => {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 180) + 'px';
+      });
+    }
+
+    function appendTurn(m) {
+      const log = document.getElementById('chat-log');
+      if (!log) return;
+      const role = m.role === 'user' ? 'user' : (m.role === 'system' ? 'system' : 'assistant');
+      const roleLabel = role === 'user' ? 'Toi' : (role === 'system' ? 'Système' : 'Galaxia');
+      const ts = m.ts ? new Date(m.ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }) : '';
+      const metaLine = m.meta
+        ? `${esc(ts)} · ${esc(m.meta.provider ?? '')}${m.meta.transport ? '/'+esc(m.meta.transport) : ''}${m.meta.matchedRule ? ' · '+esc(m.meta.matchedRule) : ''}`
+        : esc(ts);
+      const attachmentsHtml = (m.attachments ?? []).length > 0
+        ? `<div style="margin-bottom:.35rem">${m.attachments.map(a => `<span class="att-chip bubble-chip">📎 ${esc(a.name)} · ${(a.size/1024).toFixed(1)} KiB</span>`).join('')}</div>`
+        : '';
+      log.insertAdjacentHTML('beforeend', `
+        <div class="turn ${role}">
+          <div class="role">${esc(roleLabel)}</div>
+          <div class="bubble">${attachmentsHtml}${renderChatText(m.text ?? '')}</div>
+          <div class="meta">${metaLine}</div>
+        </div>
+      `);
+    }
+
+    function renderChatText(text) {
+      // Minimal markdown-ish: escape HTML, then keep ```code``` blocks and
+      // inline `code`. No dep — stays fast + safe. Line breaks preserved
+      // by CSS `white-space:pre-wrap` on .bubble.
+      const escaped = esc(text);
+      // ```lang\n...\n``` → <pre><code>...
+      const withFences = escaped.replace(/```(\w*)\n?([\s\S]*?)```/g,
+        (_m, _lang, code) => `<pre><code>${code.replace(/^\n/, '').replace(/\n$/, '')}</code></pre>`);
+      // `inline` → <code>inline</code> (only outside <pre> blocks)
+      return withFences.replace(/(?<!<pre><code>[\s\S]*?)`([^`\n]+)`/g, '<code>$1</code>');
+    }
+
+    function scrollToBottom() {
+      const log = document.getElementById('chat-log');
+      if (log) log.scrollTop = log.scrollHeight;
+    }
+
     const tabs = {
+      chat: renderChat,
       overview: renderOverview, projects: renderProjects, audit: renderAudit,
       missions: renderMissions, users: renderUsers,
     };
@@ -616,7 +821,7 @@
 
     (async () => {
       await loadMe();
-      renderOverview().catch(err => { view.innerHTML = `<div class="empty">Erreur: ${esc(err.message)}</div>`; });
+      renderChat().catch(err => { view.innerHTML = `<div class="empty">Erreur: ${esc(err.message)}</div>`; });
     })();
   </script>
 </body>
