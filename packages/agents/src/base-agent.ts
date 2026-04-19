@@ -5,6 +5,8 @@ import type {
   DataClass,
   TaskType,
   RoutingContext,
+  ActionPlan,
+  Action,
 } from '@galaxia/core';
 import { callLLM } from '@galaxia/core';
 import type { AgentContext, AgentResult, AgentRole } from './types.js';
@@ -23,6 +25,7 @@ function parseResponse(raw: string): {
   actions: string[];
   knowledge: KnowledgeEntry[];
   errors: string[];
+  plan: ActionPlan | undefined;
 } {
   const summary = extractSection(raw, 'Summary') || raw.slice(0, 500);
   const actions = extractList(raw, 'Actions');
@@ -35,7 +38,38 @@ function parseResponse(raw: string): {
     content: line,
   }));
 
-  return { summary, actions, knowledge, errors };
+  const plan = extractPlan(raw);
+
+  return { summary, actions, knowledge, errors, plan };
+}
+
+/**
+ * Extract the `## Plan` section — if present — and parse its JSON body
+ * into an ActionPlan. Accepts either a fenced ```json``` block or raw
+ * JSON after the heading. Returns undefined when:
+ *   - the section is missing entirely
+ *   - the JSON fails to parse
+ *   - the result is not an array of objects with a recognised `kind`
+ * Missing plan is legal — every existing agent started without one.
+ */
+function extractPlan(raw: string): ActionPlan | undefined {
+  const section = extractSection(raw, 'Plan');
+  if (!section) return undefined;
+  // Strip ```json / ``` fences if present.
+  const stripped = section.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+  try {
+    const parsed: unknown = JSON.parse(stripped);
+    if (!Array.isArray(parsed)) return undefined;
+    const plan: Action[] = [];
+    for (const entry of parsed) {
+      if (entry && typeof entry === 'object' && 'kind' in (entry as object)) {
+        plan.push(entry as Action);
+      }
+    }
+    return plan;
+  } catch {
+    return undefined;
+  }
 }
 
 function extractSection(text: string, heading: string): string {
@@ -129,6 +163,16 @@ export abstract class BaseAgent implements AgentRole {
       '',
       '## Errors',
       '- Any errors encountered (leave empty if none).',
+      '',
+      '## Plan (optional, JSON array)',
+      '```json',
+      '[',
+      '  { "kind": "run-shell", "command": "pnpm test", "reason": "verify current state" }',
+      ']',
+      '```',
+      'Only include a Plan when you want to propose concrete actions to the runner.',
+      'Each entry must use one of: edit-file, read-file, run-shell, pm2-restart, pm2-status,',
+      'run-tests, git-commit, http-get. Omit the section entirely if you have no plan.',
     ]
       .filter((line) => line !== null)
       .join('\n');
@@ -154,6 +198,8 @@ export abstract class BaseAgent implements AgentRole {
         actions: parsed.actions,
         knowledgeLearned: parsed.knowledge,
         errors: parsed.errors,
+        plan: parsed.plan,
+        rawText: text,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

@@ -73,6 +73,40 @@ export {
   validateRules,
 } from './routing/index.js';
 
+// Action Runner (Phase 9)
+export type {
+  ActionKind,
+  Action,
+  ActionPlan,
+  ActionResult,
+  RunnerMode,
+  EditFileAction,
+  ReadFileAction,
+  RunShellAction,
+  Pm2RestartAction,
+  Pm2StatusAction,
+  RunTestsAction,
+  GitCommitAction,
+  HttpGetAction,
+  ProjectActionPermissions,
+  ActionRunnerConfig,
+  PermissionCheck,
+  ExecuteOptions,
+} from './action-runner/index.js';
+export {
+  DEFAULT_ACTION_RUNNER_CONFIG,
+  validateAction,
+  validatePlan,
+  execute,
+  executeAction,
+  renderPlanLine,
+  shellIsAllowed,
+  domainIsAllowed,
+  pathIsUnder,
+  urlHost,
+  normalizeShell,
+} from './action-runner/index.js';
+
 // GitHub Discovery (Phase 8.5)
 export {
   discoverRepos,
