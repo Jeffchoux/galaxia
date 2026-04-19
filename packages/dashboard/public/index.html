@@ -155,134 +155,208 @@
     // Central Galaxia core + project nodes in a ring + agent nodes around
     // active projects + animated particles along edges for recent dispatches.
     function setupBrain(canvas, brainData, projectsData) {
+      // ─ ANATOMICAL BRAIN 3D ─
+      // 2 hémisphères procéduraux (sphere + displacement noise) semi-
+      // transparents, cervelet + tronc cérébral, neurones glowing à
+      // l'intérieur (un par agent récemment dispatché, couleur par type)
+      // + synapses (courbes Bezier entre neurones voisins) avec signaux
+      // animés qui voyagent le long des courbes.
+
       const scene = new THREE.Scene();
       scene.background = null;
-      const camera = new THREE.PerspectiveCamera(55, canvas.clientWidth/canvas.clientHeight, 0.1, 500);
-      camera.position.set(0, 3, 12);
+      const camera = new THREE.PerspectiveCamera(50, canvas.clientWidth/canvas.clientHeight, 0.1, 500);
+      camera.position.set(0, 1.5, 8);
       camera.lookAt(0, 0, 0);
 
       const renderer = makeRenderer(canvas);
-      const controls = new OrbitControls(camera, canvas);
+      const controls = new OrbitControls(canvas.tagName === 'CANVAS' ? camera : camera, canvas);
       controls.enableDamping = true;
       controls.enablePan = false;
       controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.6;
+      controls.autoRotateSpeed = 0.4;
 
-      // Lights — cheap ambient + one directional.
-      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-      const dir = new THREE.DirectionalLight(0xffffff, 0.5);
-      dir.position.set(5, 10, 7);
-      scene.add(dir);
+      // Lights — un key warm pour la chair, un rim bleu pour la silhouette.
+      scene.add(new THREE.AmbientLight(0xfdeef0, 0.55));
+      const key = new THREE.DirectionalLight(0xffffff, 0.9);
+      key.position.set(6, 8, 4);
+      scene.add(key);
+      const rim = new THREE.DirectionalLight(0xa0a0ff, 0.4);
+      rim.position.set(-6, 4, -4);
+      scene.add(rim);
 
-      // Central Galaxia core — violet, pulsing.
-      const core = new THREE.Mesh(
-        new THREE.SphereGeometry(0.9, 32, 32),
-        new THREE.MeshStandardMaterial({ color:0xb084ff, emissive:0x5b2ecb, emissiveIntensity:0.6, roughness:0.3 }),
-      );
-      scene.add(core);
-      // Core glow halo.
-      const halo = new THREE.Mesh(
-        new THREE.SphereGeometry(1.35, 32, 32),
-        new THREE.MeshBasicMaterial({ color:0x7b61ff, transparent:true, opacity:0.08 }),
-      );
-      scene.add(halo);
-
-      // Collect projects the user has access to.
-      const projects = (projectsData?.projects ?? []).filter((p) => p);
-      const n = projects.length || 1;
-      const ring = 6;
-
-      const edges = [];   // { src:Vector3, dst:Vector3, color:Color, active:boolean }
-      const particles = []; // { edgeIdx:number, progress:number, mesh:Mesh }
-
-      // Project nodes.
-      const projectNodes = new Map();
-      projects.forEach((proj, i) => {
-        const angle = (i / n) * Math.PI * 2;
-        const pos = new THREE.Vector3(Math.cos(angle) * ring, 0, Math.sin(angle) * ring);
-        const statusColor = STATUS_COLORS[proj.runtime?.status] ?? STATUS_COLORS.unknown;
-        const mesh = new THREE.Mesh(
-          new THREE.SphereGeometry(0.55, 24, 24),
-          new THREE.MeshStandardMaterial({ color:statusColor, emissive:statusColor, emissiveIntensity:0.35, roughness:0.4 }),
+      // Pseudo-3D noise (sans dep) — sert au displacement des sommets
+      // pour donner la texture gyri/sulci (plissures).
+      function bump(x, y, z) {
+        return (
+          0.14 * Math.sin(x * 3.5) * Math.cos(y * 3.0) +
+          0.10 * Math.sin(y * 4.5 + 1.0) * Math.cos(z * 3.7) +
+          0.09 * Math.sin(x * 5.0 + z * 4.0) +
+          0.07 * Math.cos(x * 6.2 + y * 5.9)
         );
-        mesh.position.copy(pos);
-        mesh.userData = { kind:'project', name:proj.name };
-        scene.add(mesh);
-        projectNodes.set(proj.name, { mesh, pos });
-
-        // Edge core → project.
-        edges.push({ src:new THREE.Vector3(0,0,0), dst:pos.clone(), color:new THREE.Color(statusColor), active:false });
-
-        // Agent nodes around each project, only for agents recently dispatched.
-        const brain = brainData?.projects?.[proj.name];
-        const recent = brain?.recentActions ?? [];
-        const dispatchedAgents = new Set(
-          recent.filter((a) => a.kind === 'dispatch' && a.agent).map((a) => a.agent),
-        );
-        if (dispatchedAgents.size === 0 && proj.gm?.enabled) {
-          // GM enabled but no recent dispatch — show a faint idle halo.
-          const idle = new THREE.Mesh(
-            new THREE.SphereGeometry(0.8, 16, 16),
-            new THREE.MeshBasicMaterial({ color:statusColor, transparent:true, opacity:0.06 }),
-          );
-          idle.position.copy(pos);
-          scene.add(idle);
-        }
-        const agentsArr = [...dispatchedAgents];
-        agentsArr.forEach((agentType, ai) => {
-          const aa = (ai / Math.max(agentsArr.length, 1)) * Math.PI * 2;
-          const aLocal = new THREE.Vector3(Math.cos(aa) * 1.8, Math.sin(aa * 1.3) * 0.5, Math.sin(aa) * 1.8);
-          const aPos = pos.clone().add(aLocal);
-          const aColor = AGENT_COLORS[agentType] ?? '#ffffff';
-          const am = new THREE.Mesh(
-            new THREE.SphereGeometry(0.22, 16, 16),
-            new THREE.MeshStandardMaterial({ color:aColor, emissive:aColor, emissiveIntensity:0.5 }),
-          );
-          am.position.copy(aPos);
-          am.userData = { kind:'agent', type:agentType, project:proj.name };
-          scene.add(am);
-          // Edge project → agent (animated).
-          edges.push({ src:pos.clone(), dst:aPos.clone(), color:new THREE.Color(aColor), active:true });
-        });
-      });
-
-      // Build the edge geometry as LineSegments.
-      const edgePositions = new Float32Array(edges.length * 6);
-      const edgeColors = new Float32Array(edges.length * 6);
-      edges.forEach((e, i) => {
-        edgePositions.set([e.src.x, e.src.y, e.src.z, e.dst.x, e.dst.y, e.dst.z], i * 6);
-        const c = e.color;
-        edgeColors.set([c.r, c.g, c.b, c.r, c.g, c.b], i * 6);
-      });
-      const edgeGeo = new THREE.BufferGeometry();
-      edgeGeo.setAttribute('position', new THREE.BufferAttribute(edgePositions, 3));
-      edgeGeo.setAttribute('color', new THREE.BufferAttribute(edgeColors, 3));
-      const edgeMat = new THREE.LineBasicMaterial({ vertexColors:true, transparent:true, opacity:0.35 });
-      const lines = new THREE.LineSegments(edgeGeo, edgeMat);
-      scene.add(lines);
-
-      // Spawn particles for active edges (agent dispatches).
-      edges.forEach((e, i) => {
-        if (!e.active) return;
-        const pm = new THREE.Mesh(
-          new THREE.SphereGeometry(0.07, 8, 8),
-          new THREE.MeshBasicMaterial({ color:e.color }),
-        );
-        scene.add(pm);
-        particles.push({ edgeIdx:i, progress:Math.random(), mesh:pm });
-      });
-
-      // Empty-state hint.
-      if (projects.length === 0) {
-        const sprite = new THREE.Mesh(
-          new THREE.RingGeometry(2.8, 3.2, 32),
-          new THREE.MeshBasicMaterial({ color:0x8b949e, transparent:true, opacity:0.15, side:THREE.DoubleSide }),
-        );
-        sprite.rotation.x = Math.PI / 2;
-        scene.add(sprite);
       }
 
-      // Hover tooltip.
+      // Construit un hémisphère déformé. mirror=true → face médiane à droite.
+      function hemisphereGeom(mirror) {
+        const g = new THREE.SphereGeometry(1.6, 64, 64);
+        const pos = g.attributes.position;
+        const v = new THREE.Vector3();
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i);
+          // Base ellipsoid (plus long que haut, plus profond que large)
+          let ex = v.x;
+          let ey = v.y * 0.90;
+          let ez = v.z * 1.15;
+          // Face médiane aplatie (le côté qui fait face à l'autre hémisphère)
+          if ((mirror && ex > 0) || (!mirror && ex < 0)) ex *= 0.30;
+          // Surface displacement (gyri/sulci)
+          const d = bump(ex, ey, ez);
+          const nrm = new THREE.Vector3(ex, ey, ez).normalize();
+          ex += nrm.x * d;
+          ey += nrm.y * d;
+          ez += nrm.z * d;
+          pos.setXYZ(i, ex, ey, ez);
+        }
+        g.computeVertexNormals();
+        return g;
+      }
+
+      const brainMat = new THREE.MeshPhongMaterial({
+        color: 0xf5b0be,              // rose chair
+        emissive: 0x3a0a14,            // rose-brun sourd
+        emissiveIntensity: 0.18,
+        shininess: 25,
+        transparent: true,
+        opacity: 0.55,                 // semi-transparent pour voir les neurones
+        side: THREE.DoubleSide,
+      });
+
+      const leftHemi = new THREE.Mesh(hemisphereGeom(false), brainMat);
+      leftHemi.position.x = -0.35;
+      scene.add(leftHemi);
+
+      const rightHemi = new THREE.Mesh(hemisphereGeom(true), brainMat);
+      rightHemi.position.x = 0.35;
+      scene.add(rightHemi);
+
+      // Cervelet — plus grumeleux, à l'arrière-bas.
+      function cerebellumGeom() {
+        const g = new THREE.SphereGeometry(0.7, 48, 48);
+        const pos = g.attributes.position;
+        const v = new THREE.Vector3();
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i);
+          const d = 0.10 * Math.sin(v.x * 12) * Math.cos(v.y * 10 + v.z * 11);
+          const n = v.clone().normalize();
+          pos.setXYZ(i, v.x + n.x * d, v.y + n.y * d, v.z + n.z * d);
+        }
+        g.computeVertexNormals();
+        return g;
+      }
+      const cerebellum = new THREE.Mesh(cerebellumGeom(), brainMat);
+      cerebellum.position.set(0, -0.95, -0.75);
+      cerebellum.scale.set(1.3, 0.85, 0.85);
+      scene.add(cerebellum);
+
+      // Tronc cérébral
+      const stem = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.22, 0.18, 0.7, 20),
+        brainMat,
+      );
+      stem.position.set(0, -1.5, -0.3);
+      scene.add(stem);
+
+      // ── NEURONES : un par agent récemment dispatché par les GMs ─────
+      const projects = (projectsData?.projects ?? []).filter((p) => p);
+      const allAgents = [];
+      for (const proj of projects) {
+        const b = brainData?.projects?.[proj.name];
+        const recent = b?.recentActions ?? [];
+        const dispatched = new Set(recent.filter((a) => a.kind === 'dispatch' && a.agent).map((a) => a.agent));
+        for (const agent of dispatched) {
+          allAgents.push({ project: proj.name, agent, active: true });
+        }
+      }
+      // Si zéro dispatch récent → afficher quelques neurones "idle"
+      // représentatifs des rôles disponibles (donne un visuel vivant
+      // même sur une instance fraîche).
+      if (allAgents.length === 0) {
+        for (const t of ['dev', 'review', 'analyse', 'test', 'maintenance', 'veille']) {
+          allAgents.push({ project: '(idle)', agent: t, active: false });
+        }
+      }
+
+      // Placement des neurones dans le volume du cerveau.
+      const neurons = [];
+      allAgents.forEach((na, i) => {
+        // Random point dans l'ellipsoïde (hémisphère alterné pour répartir).
+        const r = 0.55 + Math.random() * 0.7;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        let px = r * Math.sin(phi) * Math.cos(theta) * 1.1;
+        let py = r * Math.sin(phi) * Math.sin(theta) * 0.85;
+        let pz = r * Math.cos(phi);
+        // Biais hémisphère selon parité (évite qu'ils soient tous groupés)
+        px += (i % 2 === 0 ? -0.6 : 0.6);
+
+        const color = AGENT_COLORS[na.agent] ?? '#ffffff';
+        const neuron = new THREE.Mesh(
+          new THREE.SphereGeometry(0.09, 16, 16),
+          new THREE.MeshBasicMaterial({ color }),
+        );
+        neuron.position.set(px, py, pz);
+        neuron.userData = { kind: 'neuron', agent: na.agent, project: na.project, active: na.active };
+        scene.add(neuron);
+
+        // Halo glow (pulsing)
+        const glow = new THREE.Mesh(
+          new THREE.SphereGeometry(0.20, 12, 12),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: na.active ? 0.22 : 0.1 }),
+        );
+        glow.position.copy(neuron.position);
+        scene.add(glow);
+
+        neurons.push({ mesh: neuron, glow, agent: na.agent, project: na.project, active: na.active });
+      });
+
+      // ── SYNAPSES : courbes Bezier entre neurones proches ─────────────
+      const synapses = [];
+      for (let i = 0; i < neurons.length; i++) {
+        for (let j = i + 1; j < neurons.length; j++) {
+          const a = neurons[i], b = neurons[j];
+          const dist = a.mesh.position.distanceTo(b.mesh.position);
+          if (dist > 2.4) continue;                            // évite spaghetti
+          if (a.project !== b.project && Math.random() > 0.25) continue;   // préfère same-project
+
+          const mid = a.mesh.position.clone().add(b.mesh.position).multiplyScalar(0.5);
+          mid.y += 0.15 + Math.random() * 0.25;
+          const curve = new THREE.QuadraticBezierCurve3(a.mesh.position.clone(), mid, b.mesh.position.clone());
+          const points = curve.getPoints(24);
+          const geom = new THREE.BufferGeometry().setFromPoints(points);
+          const ca = new THREE.Color(AGENT_COLORS[a.agent] ?? '#ffffff');
+          const cb = new THREE.Color(AGENT_COLORS[b.agent] ?? '#ffffff');
+          const avg = ca.clone().lerp(cb, 0.5);
+          const line = new THREE.Line(geom, new THREE.LineBasicMaterial({
+            color: avg, transparent: true, opacity: 0.45,
+          }));
+          scene.add(line);
+
+          // Signal (petit sphere qui voyage le long de la curve)
+          const signal = new THREE.Mesh(
+            new THREE.SphereGeometry(0.055, 8, 8),
+            new THREE.MeshBasicMaterial({ color: avg }),
+          );
+          scene.add(signal);
+
+          synapses.push({
+            curve, signal,
+            progress: Math.random(),
+            speed: 0.004 + Math.random() * 0.008,
+            line,
+          });
+        }
+      }
+
+      // ── Interactions ────────────────────────────────────────────────
       const tooltipEl = canvas.parentElement.querySelector('.tooltip');
       const raycaster = new THREE.Raycaster();
       const mouse = new THREE.Vector2(-10, -10);
@@ -293,7 +367,6 @@
       };
       canvas.addEventListener('pointermove', onMove);
 
-      // Resize handler.
       const onResize = () => {
         const w = canvas.clientWidth, h = canvas.clientHeight;
         camera.aspect = w / h;
@@ -303,37 +376,43 @@
       const resizeObs = new ResizeObserver(onResize);
       resizeObs.observe(canvas);
 
-      // Animation loop.
+      // ── Animation loop ──────────────────────────────────────────────
       let raf = 0;
       const start = performance.now();
       function tick() {
         raf = requestAnimationFrame(tick);
         const t = (performance.now() - start) / 1000;
-        // Core pulse.
-        const pulse = 1 + Math.sin(t * 2) * 0.04;
-        core.scale.setScalar(pulse);
-        halo.scale.setScalar(pulse);
-        halo.material.opacity = 0.06 + Math.sin(t * 2) * 0.03;
-        // Particles slide along their edges.
-        for (const p of particles) {
-          p.progress += 0.008;
-          if (p.progress > 1) p.progress = 0;
-          const e = edges[p.edgeIdx];
-          p.mesh.position.lerpVectors(e.src, e.dst, p.progress);
+
+        // Neurones pulsent (actifs plus forts que idle)
+        for (let i = 0; i < neurons.length; i++) {
+          const n = neurons[i];
+          const amp = n.active ? 0.25 : 0.10;
+          const scale = 1 + Math.sin(t * 3 + i * 0.7) * amp;
+          n.glow.scale.setScalar(scale);
+          n.glow.material.opacity = (n.active ? 0.18 : 0.08) + Math.sin(t * 3 + i * 0.7) * 0.08;
         }
-        // Hover check.
+
+        // Signaux voyagent le long des synapses
+        for (const s of synapses) {
+          s.progress += s.speed;
+          if (s.progress > 1) s.progress = 0;
+          const p = s.curve.getPoint(s.progress);
+          s.signal.position.copy(p);
+        }
+
+        // Raycast pour hover tooltip (seulement les neurones, pas la matière cérébrale)
         raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(scene.children, false);
-        const hit = intersects.find((i) => i.object.userData?.kind);
-        if (hit && tooltipEl) {
-          const d = hit.object.userData;
-          tooltipEl.textContent = d.kind === 'project'
-            ? `📦 ${d.name}`
-            : `🤖 ${d.type} → ${d.project}`;
+        const intersects = raycaster.intersectObjects(neurons.map((n) => n.mesh), false);
+        if (intersects.length && tooltipEl) {
+          const d = intersects[0].object.userData;
+          tooltipEl.textContent = d.project === '(idle)'
+            ? `🧬 ${d.agent} (idle)`
+            : `🧬 ${d.agent} → ${d.project}`;
           tooltipEl.classList.add('on');
         } else if (tooltipEl) {
           tooltipEl.classList.remove('on');
         }
+
         controls.update();
         renderer.render(scene, camera);
       }
