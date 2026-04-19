@@ -88,6 +88,7 @@
     <button class="active" data-tab="chat">💬 Chat</button>
     <button data-tab="overview">Overview</button>
     <button data-tab="projects">Projects</button>
+    <button data-tab="veille">👁 Veille</button>
     <button data-tab="audit">Audit</button>
     <button data-tab="missions">Missions</button>
     <button data-tab="users">Users</button>
@@ -796,9 +797,103 @@
       if (log) log.scrollTop = log.scrollHeight;
     }
 
+    // ────────────────────────────────────────────────────────────────────
+    //  Veille tab — Watcher feed
+    // ────────────────────────────────────────────────────────────────────
+    async function renderVeille() {
+      disposeActiveScenes();
+      view.innerHTML = `
+        <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:1rem">
+          <input id="veille-submit" placeholder="Coller une URL ou du texte à analyser…" style="flex:1;padding:.55rem .7rem;background:#0b0d10;color:var(--fg);border:1px solid var(--border);border-radius:6px;font-size:.9rem">
+          <button id="veille-send" class="att-btn">/watch</button>
+          <select id="veille-filter" style="padding:.5rem;background:#0b0d10;color:var(--fg);border:1px solid var(--border);border-radius:6px">
+            <option value="">Tous projets</option>
+          </select>
+        </div>
+        <div id="veille-list"></div>
+      `;
+      const list = document.getElementById('veille-list');
+      const filterEl = document.getElementById('veille-filter');
+      const input = document.getElementById('veille-submit');
+      const sendBtn = document.getElementById('veille-send');
+
+      // Populate project filter dropdown.
+      try {
+        const { projects } = await api('api/projects');
+        for (const p of projects) {
+          const opt = document.createElement('option');
+          opt.value = p.name; opt.textContent = p.name;
+          filterEl.appendChild(opt);
+        }
+      } catch { /* no projects */ }
+
+      async function reload() {
+        list.innerHTML = '<div class="empty" style="padding:1.5rem">Chargement…</div>';
+        const filter = filterEl.value;
+        const qs = filter ? `?n=50&project=${encodeURIComponent(filter)}` : '?n=50';
+        try {
+          const { findings } = await api('api/watch' + qs);
+          if (!findings || findings.length === 0) {
+            list.innerHTML = `<div class="empty">Aucun finding pour l'instant. Le watcher scan toutes les 4h (HN + Arxiv). Premier scan après le boot du daemon.</div>`;
+            return;
+          }
+          list.innerHTML = findings.slice().reverse().map(f => `
+            <div class="card" style="margin-bottom:.6rem">
+              <div style="display:flex;justify-content:space-between;gap:.5rem;align-items:start">
+                <div style="flex:1">
+                  <div style="font-weight:600;line-height:1.4">${esc(f.summary)}</div>
+                  <div style="margin-top:.35rem;font-size:.78rem;color:var(--muted)">
+                    <span class="pill">${esc(f.source)}</span>
+                    ${(f.tags||[]).map(t=>`<span class="pill">#${esc(t)}</span>`).join(' ')}
+                    ${(f.relevantProjects||[]).map(p=>`<span class="pill owner">${esc(p)}</span>`).join(' ')}
+                    <span style="margin-left:.5rem">${esc(new Date(f.ts).toLocaleString())}</span>
+                    ${f.submittedBy ? `<span style="margin-left:.5rem">par ${esc(f.submittedBy)}</span>` : ''}
+                  </div>
+                </div>
+                ${f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener" style="color:var(--accent);font-size:.8rem;white-space:nowrap">ouvrir ↗</a>` : ''}
+              </div>
+            </div>
+          `).join('');
+        } catch (err) {
+          list.innerHTML = `<div class="empty">Erreur: ${esc(err.message)}</div>`;
+        }
+      }
+
+      filterEl.addEventListener('change', reload);
+
+      // Soumission inline : POST /api/chat ne convient pas ici — le
+      // watcher ingest côté serveur n'a pas encore d'endpoint POST
+      // dashboard public (ingestion se fait via /watch Telegram en v1).
+      // On expose un raccourci : on copie le texte dans un /api/chat
+      // avec un préfixe explicite pour que le user envoie via le bot.
+      sendBtn.addEventListener('click', async () => {
+        const text = input.value.trim();
+        if (!text) return;
+        sendBtn.disabled = true; sendBtn.textContent = '⏳';
+        try {
+          const res = await fetch('api/watch', {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ text }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? 'erreur');
+          input.value = '';
+          sendBtn.textContent = '✓';
+          setTimeout(async () => { sendBtn.textContent = '/watch'; sendBtn.disabled = false; await reload(); }, 800);
+        } catch (err) {
+          sendBtn.textContent = '✗'; sendBtn.disabled = false;
+          alert('Erreur: ' + err.message);
+        }
+      });
+
+      reload();
+    }
+
     const tabs = {
       chat: renderChat,
-      overview: renderOverview, projects: renderProjects, audit: renderAudit,
+      overview: renderOverview, projects: renderProjects,
+      veille: renderVeille, audit: renderAudit,
       missions: renderMissions, users: renderUsers,
     };
 

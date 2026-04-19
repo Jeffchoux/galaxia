@@ -7,6 +7,7 @@
 
 import type { GalaxiaConfig, Project, AgentType } from '../types.js';
 import { callLLM } from '../llm-router.js';
+import { loadFindings, loadFindingsForProject } from '../watcher/feed.js';
 import type { GMConfig, GMDecision, GMState } from './types.js';
 
 const KNOWN_AGENTS: AgentType[] = [
@@ -34,6 +35,17 @@ export async function decideNext(
     gmConfig?.extraSystem ?? '',
   ].filter(Boolean).join('\n');
 
+  // Inject le feed du watcher (findings ciblés + findings généraux) pour
+  // que le GM puisse relier ses décisions à la veille tech récente.
+  const targeted = loadFindingsForProject(config.dataDir, project.name, 3);
+  const general = loadFindings(config.dataDir, 50)
+    .filter((f) => !f.relevantProjects || f.relevantProjects.length === 0)
+    .slice(-2);
+  const findings = [...targeted, ...general];
+  const watchBlock = findings.length === 0
+    ? '(aucun finding pertinent)'
+    : findings.map((f) => `  [${f.source}] ${f.summary}${f.tags?.length ? ' · #' + f.tags.join(' #') : ''}`).join('\n');
+
   const userPrompt = [
     `Project: ${project.name}`,
     `Path: ${project.path}`,
@@ -46,6 +58,9 @@ export async function decideNext(
     '',
     `Recent GM actions (last ${Math.min(state.recentActions.length, 5)}):`,
     state.recentActions.slice(-5).map((a) => `  ${a.ts} ${a.kind} ${a.agent ?? ''} ${a.task ?? ''} (${a.reason})`).join('\n') || '  (none)',
+    '',
+    'Veille tech récente (via watcher Galaxia) :',
+    watchBlock,
     '',
     `Health score: ${state.healthScore.toFixed(2)}`,
     `Cycles run: ${state.cyclesRun}`,

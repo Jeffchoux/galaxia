@@ -30,7 +30,7 @@ import {
   handleGetState, handleGetProjects, handleGetAudit,
   handleGetMissions, handleGetUsers, handleGetMe, handleGetBrain,
   handlePostChat, handleGetChatHistory, handlePostChatUpload,
-  handleGetWatcherFeed,
+  handleGetWatcherFeed, handlePostWatcherIngest,
   writeJSON, type RouteContext,
 } from './routes.js';
 
@@ -186,6 +186,7 @@ export function startDashboard(options: StartDashboardOptions | number = {}, leg
       if (urlPath === '/api/chat/history'  && req.method === 'GET')  { handleGetChatHistory(req, res, ctx); return; }
       if (urlPath === '/api/chat/upload'    && req.method === 'POST') { await handlePostChatUpload(req, res, ctx); return; }
       if (urlPath === '/api/watch'          && req.method === 'GET')  { handleGetWatcherFeed(req, res, ctx); return; }
+      if (urlPath === '/api/watch'          && req.method === 'POST') { await handlePostWatcherIngest(req, res, ctx); return; }
     }
 
     // ── Legacy 3D dashboard ──

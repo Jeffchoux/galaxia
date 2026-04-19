@@ -16,27 +16,39 @@ export interface WatcherHandle {
  * Returns the number of findings added. Safe to call manually.
  */
 export async function runScanOnce(config: GalaxiaConfig, log: (m: string) => void): Promise<number> {
+  // Volumes volontairement modestes : 8 entrées / scan x toutes les 4h =
+  // 48 entrées/j, largement sous le rate limit gratuit de Groq (30 req/min).
   const [hn, arxiv] = await Promise.all([
-    fetchHackerNews(10).catch(() => []),
-    fetchArxiv(8).catch(() => []),
+    fetchHackerNews(5).catch(() => []),
+    fetchArxiv(3).catch(() => []),
   ]);
   const raw = [...hn, ...arxiv];
   if (raw.length === 0) { log('scan: no entries fetched (network?)'); return 0; }
   log(`scan: ${raw.length} raw entries (HN=${hn.length}, arxiv=${arxiv.length}) — analyzing…`);
 
   let added = 0;
+  let skipped = 0;
   for (const entry of raw) {
     try {
-      const analysis = await analyzeRawEntry(entry, config);
-      if (!analysis) continue;
+      // Wrap chaque analyse dans un timeout agressif (45s) pour qu'un
+      // provider saturé ne bloque pas tout le scan. Si null -> entrée
+      // skipped sans erreur.
+      const analysis = await Promise.race([
+        analyzeRawEntry(entry, config),
+        new Promise<null>((r) => setTimeout(() => r(null), 45_000)),
+      ]);
+      if (!analysis) { skipped++; continue; }
       const finding: WatchFinding = rawEntryToFinding(entry, analysis);
       appendFinding(config.dataDir, finding);
       added++;
     } catch (err) {
+      skipped++;
       log(`analyze error on "${entry.title.slice(0, 40)}": ${(err as Error).message}`);
     }
+    // Petit sleep entre appels pour amortir les bursts sur le rate limit.
+    await new Promise((r) => setTimeout(r, 1500));
   }
-  log(`scan: ${added} finding(s) kept after filter`);
+  log(`scan: ${added} kept, ${skipped} skipped (LLM down ou non-pertinent)`);
   return added;
 }
 

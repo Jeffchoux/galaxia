@@ -18,6 +18,7 @@ import {
   missionsFilePath,
   loadGMState,
   loadWatcherFindings,
+  ingestWatcherSubmission,
   callLLM,
 } from '@galaxia/core';
 
@@ -461,4 +462,32 @@ export function handleGetWatcherFeed(req: IncomingMessage, res: ServerResponse, 
     return f.relevantProjects.some((p) => userCanAccess(ctx.user!, p));
   });
   writeJSON(res, 200, { findings: filtered.slice(-n) });
+}
+
+// ── POST /api/watch  { text } ──────────────────────────────────────────────
+// Owner-only (même règle que /watch Telegram). URL optionnelle dans le texte.
+
+export async function handlePostWatcherIngest(req: IncomingMessage, res: ServerResponse, ctx: RouteContext): Promise<void> {
+  if (!requireAuth(res, ctx.user)) return;
+  if (!isOwner(ctx.user!)) { writeJSON(res, 403, { error: 'owner only' }); return; }
+  let body: { text?: string };
+  try {
+    const raw = await readBody(req);
+    body = JSON.parse(raw) as { text?: string };
+  } catch (err) {
+    writeJSON(res, 400, { error: `bad request: ${(err as Error).message}` });
+    return;
+  }
+  const text = (body.text ?? '').trim();
+  if (!text) { writeJSON(res, 400, { error: 'empty text' }); return; }
+  if (text.length > 20_000) { writeJSON(res, 413, { error: 'text too long (20k max)' }); return; }
+  try {
+    const finding = await ingestWatcherSubmission(
+      { rawText: text, submittedBy: ctx.user!.name, source: 'user-dashboard' },
+      ctx.config,
+    );
+    writeJSON(res, 200, { finding });
+  } catch (err) {
+    writeJSON(res, 500, { error: (err as Error).message });
+  }
 }
