@@ -86,6 +86,33 @@ export class ProjectGM {
       return { kind: 'wait', reason };
     }
 
+    // Git sync guard — évite qu'un GM local travaille sur du code
+    // périmé si Jeff (ou un collaborateur) a pushé depuis ailleurs.
+    // syncPiece() ne throw jamais; il retourne un outcome structuré.
+    const { syncPiece, describeSyncOutcome } = await import('../git-sync/index.js');
+    const sync = await syncPiece(this.project.path);
+    if (!sync.ok) {
+      const ts0 = this.now().toISOString();
+      const reason = `git sync blocked: ${describeSyncOutcome(sync)}`;
+      appendJournal(this.config.dataDir, this.project.name, {
+        ts: ts0, kind: 'review', reason,
+      });
+      // État inchangé sauf nextReviewAt, on retente au prochain tick.
+      const interval = Math.max(GM_MIN_INTERVAL_MIN, this.gmConfig?.intervalMinutes ?? GM_DEFAULT_INTERVAL_MIN);
+      this.saveState({
+        lastReviewAt: ts0,
+        nextReviewAt: new Date(this.now().getTime() + interval * 60_000).toISOString(),
+      });
+      return { kind: 'wait', reason };
+    }
+    // Si on a pullé quelque chose, on l'inscrit en journal info (kind=review).
+    if (sync.action === 'pulled') {
+      appendJournal(this.config.dataDir, this.project.name, {
+        ts: this.now().toISOString(), kind: 'review',
+        reason: describeSyncOutcome(sync),
+      });
+    }
+
     const decision = await decideNext(this.project, state, this.gmConfig, this.config);
     const ts = this.now().toISOString();
     let action: GMAction;

@@ -73,6 +73,10 @@ export {
   validateRules,
 } from './routing/index.js';
 
+// Git sync guard for pieces
+export type { SyncOutcome } from './git-sync/index.js';
+export { syncPiece, describeSyncOutcome } from './git-sync/index.js';
+
 // Global Watcher (Phase 15 bis — veille tech partagée entre projets)
 export type {
   WatchSource,
