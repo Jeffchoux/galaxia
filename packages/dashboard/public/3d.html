@@ -156,6 +156,7 @@ body { background:#000; overflow:hidden; font-family:'Inter',system-ui,sans-seri
 <canvas id="c"></canvas>
 
 <header id="topbar">
+  <a href="./" style="color:#6cf;text-decoration:none;padding:0 .75rem;font-size:.85rem">← Dashboard</a>
   <div class="tb-logo">GALAXIA</div>
   <div class="tb-sep"></div>
   <div class="metric">
@@ -225,70 +226,15 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 // ============================================================
-//  DEMO DATA (used when API is unavailable)
+//  FALLBACK DATA (used only when API is unreachable)
+//  NOTE: intentionally empty — this view must show real Galaxia
+//  projects. Hardcoded demo projects were removed 2026-04-19 after
+//  Jeff (rightly) objected to seeing fake rooms in the 3D view.
 // ============================================================
 const DEMO_DATA = {
-  system: { cpu: '12.4%', ram: '48%', disk: '34%', pm2Online: '6/6' },
-  projects: {
-    'web-app': {
-      name: 'Web App', status: 'healthy', lastCycle: '2m ago', backlogCount: 3,
-      bugFixedToday: 2, nextPriority: 'Add user dashboard',
-      agents: [
-        { id: 'dev-web', name: 'Dev', type: 'dev', state: 'working', lastTask: 'Implementing API routes' },
-        { id: 'test-web', name: 'Test', type: 'test', state: 'working', lastTask: 'Running integration suite' },
-        { id: 'cicd-web', name: 'CI/CD', type: 'cicd', state: 'idle', lastTask: 'Last deploy succeeded' },
-      ],
-    },
-    'api-service': {
-      name: 'API Service', status: 'healthy', lastCycle: '5m ago', backlogCount: 1,
-      bugFixedToday: 0, nextPriority: 'Optimize query performance',
-      agents: [
-        { id: 'dev-api', name: 'Dev', type: 'dev', state: 'working', lastTask: 'Refactoring auth module' },
-        { id: 'analyse-api', name: 'Analyse', type: 'analyse', state: 'talking', lastTask: 'Performance metrics review' },
-      ],
-    },
-    'ml-pipeline': {
-      name: 'ML Pipeline', status: 'warning', lastCycle: '12m ago', backlogCount: 7,
-      bugFixedToday: 1, nextPriority: 'Fix training data drift',
-      agents: [
-        { id: 'dev-ml', name: 'Dev', type: 'dev', state: 'working', lastTask: 'Updating feature extraction' },
-        { id: 'test-ml', name: 'Test', type: 'test', state: 'sleeping', lastTask: 'Waiting for build' },
-        { id: 'veille-ml', name: 'Veille', type: 'veille', state: 'idle', lastTask: 'Checked latest arxiv papers' },
-      ],
-    },
-    'mobile-app': {
-      name: 'Mobile App', status: 'healthy', lastCycle: '1m ago', backlogCount: 5,
-      bugFixedToday: 3, nextPriority: 'Push notifications',
-      agents: [
-        { id: 'dev-mob', name: 'Dev', type: 'dev', state: 'working', lastTask: 'Building notification system' },
-        { id: 'contenu-mob', name: 'Content', type: 'contenu', state: 'talking', lastTask: 'Writing onboarding copy' },
-      ],
-    },
-    'data-warehouse': {
-      name: 'Data Warehouse', status: 'critical', lastCycle: '45m ago', backlogCount: 12,
-      bugFixedToday: 0, nextPriority: 'Fix replication lag',
-      agents: [
-        { id: 'dev-dw', name: 'Dev', type: 'dev', state: 'working', lastTask: 'Debugging replication' },
-        { id: 'controle-dw', name: 'Control', type: 'controle', state: 'working', lastTask: 'Health check failing' },
-        { id: 'analyse-dw', name: 'Analyse', type: 'analyse', state: 'idle', lastTask: 'Awaiting fix' },
-      ],
-    },
-    'orchestrator': {
-      name: 'Orchestrator', status: 'healthy', lastCycle: 'now', backlogCount: 0,
-      bugFixedToday: 0, nextPriority: 'Monitoring all systems',
-      isOrchestrator: true,
-      agents: [
-        { id: 'orch-main', name: 'Orchestrator', type: 'controle', state: 'working', lastTask: 'Coordinating agents' },
-      ],
-    },
-  },
-  notifications: [
-    'Deploy succeeded for Web App',
-    'ML Pipeline: training accuracy dropped 2%',
-    'Data Warehouse replication lag detected',
-    'Mobile App: 3 bugs fixed today',
-    'Orchestrator cycle completed in 4.2s',
-  ],
+  system: { cpu: '—', ram: '—', disk: '—', pm2Online: '—' },
+  projects: {},
+  notifications: ['⚠️ API unreachable — no live state. Check daemon.'],
   lastUpdated: new Date().toISOString(),
 };
 
@@ -734,7 +680,7 @@ function rotateTicker() {
 // ============================================================
 async function fetchStatus() {
   try {
-    const res = await fetch('/api/status');
+    const res = await fetch('api/status');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     galaxiaState = data;
@@ -752,7 +698,7 @@ async function fetchStatus() {
 
 function connectSSE() {
   try {
-    eventSource = new EventSource('/events');
+    eventSource = new EventSource('events');
     eventSource.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
