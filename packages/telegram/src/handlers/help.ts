@@ -14,6 +14,7 @@ const COMMANDS: Array<[string, string]> = [
   ['/audit [N]',                      'Dernières N décisions de routage (défaut 10)'],
   ['/logs [N]',                       'N dernières lignes du daemon (défaut 20)'],
   ['/whoami',                         'Identité / rôle / scope de l\'utilisateur courant'],
+  ['/discover',                       'GitHub Discovery : liste les repos et propose de les intégrer (owner-only)'],
   ['/help',                           'Afficher cette aide'],
   ['<texte libre>',                   'Conversation — envoyé au LLM avec dataClass=personal'],
 ];

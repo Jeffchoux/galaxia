@@ -73,6 +73,22 @@ export {
   validateRules,
 } from './routing/index.js';
 
+// GitHub Discovery (Phase 8.5)
+export {
+  discoverRepos,
+  createRoom,
+  archiveRepo,
+  GhNotAuthenticatedError,
+} from './github/index.js';
+export type {
+  GhRepo,
+  DiscoveredRepo,
+  DiscoverResult,
+  RepoPieceStatus,
+  CreateRoomOptions,
+  CreateRoomResult,
+} from './github/index.js';
+
 // Auth (Phase 7 — multi-user with scope)
 export {
   userCanAccess,
