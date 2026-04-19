@@ -8,3 +8,10 @@ dist/
 coverage/
 .DS_Store
 .superpowers/
+# Phase 8+ — nested git histories of project pieces (each project under
+# /opt/galaxia/projects/<name>/ can have its own .git). Don't embed them
+# as submodules or gitlinks — just keep them untracked in Galaxia's repo.
+projects/*/.git/
+projects/*/node_modules/
+projects/*/.next/
+projects/*/dist/
