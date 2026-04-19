@@ -72,6 +72,12 @@ export interface GalaxiaConfig {
   users?: GalaxiaUser[];
   // Phase 9 — action runner configuration (dry-run default, gated kinds).
   actionRunner?: import('./action-runner/types.js').ActionRunnerConfig;
+  // Phase 12 — observability dashboard (HTTP server started by the
+  // daemon when enabled). Port default 3333.
+  dashboard?: {
+    enabled?: boolean;
+    port?: number;
+  };
   llm: {
     light: LLMProviderConfig;
     medium: LLMProviderConfig;

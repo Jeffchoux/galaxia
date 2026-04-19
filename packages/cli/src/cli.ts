@@ -934,6 +934,25 @@ async function runDaemon(): Promise<void> {
     daemonLog('[telegram] enabled in config but botToken missing or no telegram identities — skipped');
   }
 
+  // Phase 12 — observability dashboard (HTTP). Spawned in-process so it
+  // shares the daemon's lifecycle. Uses dynamic import to keep the CLI
+  // package runnable without @galaxia/dashboard when users don't need
+  // the web UI.
+  if (config.dashboard?.enabled) {
+    try {
+      const dashUrl = new URL('../../dashboard/dist/server.js', import.meta.url).href;
+      const mod = (await import(dashUrl)) as { startDashboard: (opts: { port?: number; config?: unknown; dataDir?: string }) => void };
+      mod.startDashboard({
+        port: config.dashboard.port ?? 3333,
+        config: config,
+        dataDir: config.dataDir,
+      });
+      daemonLog(`[dashboard] started on port ${config.dashboard.port ?? 3333}`);
+    } catch (err) {
+      daemonLog(`[dashboard] failed to start: ${(err as Error).message}`);
+    }
+  }
+
   // Phase 10 — per-project General Manager loops. One loop per project
   // that has `gm.enabled: true` in galaxia.yml. Loops run independently
   // of the main cycle so a slow LLM call on one GM doesn't block the
