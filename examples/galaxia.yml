@@ -1,0 +1,145 @@
+# Galaxia — commented reference config.
+# Copy to /root/galaxia-data/config/galaxia.yml (or whatever GALAXIA_DATA_DIR points at)
+# and adapt. Anything marked ${VAR} is expanded against /opt/galaxia/.env at load time.
+
+business:
+  name: Galaxia — my instance
+  description: Reference instance of Galaxia OS, running on my own VPS.
+
+# Where runtime data lives. Overridden by GALAXIA_DATA_DIR at runtime if set.
+dataDir: /root/galaxia-data
+
+# ── LLM providers, per tier ──────────────────────────────────────────────────
+# Tiers: light (cheap cloud), medium, heavy (strong reasoning), local (on-box).
+# Pick whatever model you want. Galaxia supports Groq, Claude, OpenAI, Ollama.
+llm:
+  light:
+    provider: groq
+    model: llama-3.3-70b-versatile
+    apiKey: ${GROQ_API_KEY}
+  medium:
+    provider: groq
+    model: llama-3.3-70b-versatile
+    apiKey: ${GROQ_API_KEY}
+  heavy:
+    provider: claude
+    model: claude-sonnet-4-5-20250929
+    apiKey: ${ANTHROPIC_API_KEY}
+    # Claude-only: try the local `claude` CLI first (exploits a Max
+    # subscription), fall back to HTTP. Default is 'cli'.
+    transport: cli
+  local:
+    provider: ollama
+    model: gemma4:e2b
+    url: http://localhost:11434
+
+# ── Orchestrator cycle ───────────────────────────────────────────────────────
+agents:
+  mode: mission          # 'mission' or 'continuous'
+  cycleInterval: 3600    # seconds; minimum effectively floored at 60
+  enabled:
+    - dev
+    - cicd
+    - test
+    - analyse
+    - controle
+    - veille
+
+# ── Projects ("rooms in the building") ───────────────────────────────────────
+projects:
+  - name: learn-ai
+    path: /opt/galaxia/projects/learn-ai
+    description: My learning platform.
+    allowedShellCommands:
+      - pnpm install
+      - pnpm build
+      - pnpm test
+      - git status
+    allowedHttpDomains:
+      - api.github.com
+    gm:
+      enabled: true
+      intervalMinutes: 30
+
+# ── Owner + collaborators (Phase 7) ──────────────────────────────────────────
+owner: alice
+users:
+  - name: alice
+    role: owner
+    scope: ['*']
+    auth:
+      telegramChatIds:
+        - ${TELEGRAM_CHAT_ID}
+      # Generate with:
+      # node -e "import('/opt/galaxia/packages/core/dist/index.js').then(({hashPassword})=>console.log(hashPassword('myPwd')))"
+      webPasswordHash: scrypt$xxxxxxxxxxxxxxxx$yyyyyyyyyyyyyyyy
+  - name: bob
+    role: collaborator
+    scope: ['learn-ai']
+    auth:
+      telegramChatIds: []
+      webPasswordHash: scrypt$aaaaaaaaaaaaaaaa$bbbbbbbbbbbbbbbb
+
+# ── Outbound one-way notifications ───────────────────────────────────────────
+notifications:
+  telegram:
+    botToken: ${TELEGRAM_BOT_TOKEN}
+    chatId: ${TELEGRAM_CHAT_ID}
+
+# ── Telegram bidirectional bot (Phase 6+) ────────────────────────────────────
+telegram:
+  enabled: true
+  botToken: ${GALAXIA_TG_BOT_TOKEN}
+  allowedChatIds:
+    - ${TELEGRAM_CHAT_ID}           # legacy fallback when `users[]` is empty
+  pollingIntervalMs: 30000
+  requiresConfirmation:
+    - dispatch-cicd
+    - dispatch-dev
+    - mission-delete
+    - action-plan-apply
+
+# ── Action runner (Phase 9) ──────────────────────────────────────────────────
+actionRunner:
+  defaultMode: dry-run
+  requireConfirmation:
+    - edit-file
+    - run-shell
+    - pm2-restart
+    - git-commit
+
+# ── Observability dashboard (Phase 12) ───────────────────────────────────────
+dashboard:
+  enabled: true
+  port: 3333
+
+# ── Presentation ─────────────────────────────────────────────────────────────
+display:
+  timezone: Europe/Paris
+
+# ── Routing doctrine (Pillar 4.bis) ──────────────────────────────────────────
+routing:
+  strictLocalOnly: true
+  auditLogMaxMB: 10
+  rules:
+    - name: confidential-stays-local
+      description: Confidential/secret never leaves the host.
+      when:
+        dataClassIn: [confidential, secret]
+      then:
+        tier: local
+        forbidFallback: true
+
+    - name: creative-writing-uses-claude
+      description: Rédaction créative → Claude.
+      when:
+        taskType: creative-writing
+      then:
+        tier: heavy
+
+    - name: public-goes-light
+      description: Public content → cheap cloud.
+      when:
+        dataClass: public
+      then:
+        tier: light
