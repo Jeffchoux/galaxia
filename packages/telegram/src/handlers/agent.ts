@@ -4,6 +4,7 @@
 // inline-keyboard confirmation flow first.
 
 import type { AgentType } from '@galaxia/core';
+import { userCanAccess } from '@galaxia/core';
 import { getAgent, type AgentContext } from '@galaxia/agents';
 import type { CommandContext } from '../types.js';
 import { escapeMd2 } from '../format.js';
@@ -59,9 +60,12 @@ async function runAgentAndReport(
   chatId: number,
 ): Promise<void> {
   const agent = getAgent(type);
-  // AgentContext needs a project. Use the first configured project; if
-  // none, synthesise a placeholder so routing still has a projectTag.
-  const project = (ctx.config.projects ?? [])[0] ?? {
+  // AgentContext needs a project. Phase 7 — pick the first project the
+  // current user can actually access; if none, synthesise a placeholder.
+  // A user with empty scope gets the placeholder (routing still works but
+  // won't match any project-specific rule).
+  const projects = ctx.config.projects ?? [];
+  const project = projects.find((p) => userCanAccess(ctx.currentUser, p.name)) ?? {
     name: 'telegram-ad-hoc',
     path: ctx.config.dataDir,
   };

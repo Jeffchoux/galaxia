@@ -1,28 +1,30 @@
-// GALAXIA Telegram — auth middleware.
+// GALAXIA Telegram — auth middleware (Phase 7 multi-user aware).
 //
-// Rule (from the phase 6 brief): never reveal whether a chat_id is known.
-// Unauthorised chats get SILENT drop — no message, no callback answer, no
-// "you are not authorised" reply. A stranger probing the bot should get the
-// same behaviour as sending a message into the void.
+// Rule (from the phase 6 brief, preserved): never reveal whether a chat_id
+// is known. Unauthorised chats get SILENT drop — no message, no callback
+// answer, no "you are not authorised" reply.
+//
+// Phase 7 change: the whitelist is now sourced from `config.users[]` with
+// `telegram.allowedChatIds` as legacy fallback when no users block exists.
+// All the heavy lifting is in @galaxia/core/auth — we just re-expose it
+// under the same shape the poller/router were already importing.
 
-import type { GalaxiaConfig } from '@galaxia/core';
+import type { GalaxiaConfig, GalaxiaUser } from '@galaxia/core';
+import { findUserByTelegramChatId } from '@galaxia/core';
 
 /**
- * Returns true if the given chat_id appears in
- * `config.telegram.allowedChatIds`. Accepts both number and string in the
- * whitelist (YAML may load ${TELEGRAM_CHAT_ID} as string). The compare is
- * numeric when both sides parse as integers, string-equality otherwise.
+ * Returns the authenticated user for this chat_id, or null if the chat is
+ * not whitelisted. Router and Poller use this as the single auth gate.
+ */
+export function findUser(chatId: number, config: GalaxiaConfig): GalaxiaUser | null {
+  return findUserByTelegramChatId(chatId, config);
+}
+
+/**
+ * Boolean shortcut for call sites that only need "allowed vs not". Kept
+ * for back-compat with anything outside the package that might have
+ * imported `isAllowed` before Phase 7.
  */
 export function isAllowed(chatId: number, config: GalaxiaConfig): boolean {
-  const allowed = config.telegram?.allowedChatIds;
-  if (!allowed || allowed.length === 0) return false;
-  for (const entry of allowed) {
-    if (typeof entry === 'number' && entry === chatId) return true;
-    if (typeof entry === 'string') {
-      const n = Number(entry);
-      if (Number.isFinite(n) && n === chatId) return true;
-      if (entry === String(chatId)) return true;
-    }
-  }
-  return false;
+  return findUser(chatId, config) !== null;
 }

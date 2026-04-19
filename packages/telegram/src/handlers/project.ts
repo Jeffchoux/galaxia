@@ -2,7 +2,7 @@
 // knowledge entries, backlog snapshot.
 
 import { existsSync, readFileSync } from 'node:fs';
-import { stateFilePath, knowledgeFilePath } from '@galaxia/core';
+import { stateFilePath, knowledgeFilePath, userCanAccess } from '@galaxia/core';
 import type { CommandContext } from '../types.js';
 import { escapeMd2, timeSince } from '../format.js';
 
@@ -26,8 +26,12 @@ export async function handleProject(ctx: CommandContext): Promise<void> {
     return;
   }
   const proj = (ctx.config.projects ?? []).find((p) => p.name === name);
-  if (!proj) {
-    await ctx.client.sendMessage(ctx.chatId, escapeMd2(`Projet "${name}" introuvable dans galaxia.yml.`), {
+  // Phase 7 — scope check. If the user can't see this project we respond
+  // exactly like when the project doesn't exist. Never reveal the
+  // difference between "out of scope" and "not configured" — that would
+  // leak the existence of other projects.
+  if (!proj || !userCanAccess(ctx.currentUser, proj.name)) {
+    await ctx.client.sendMessage(ctx.chatId, escapeMd2(`Projet "${name}" introuvable.`), {
       parse_mode: 'MarkdownV2',
     });
     return;

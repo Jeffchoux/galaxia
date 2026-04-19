@@ -5,7 +5,7 @@ export { TelegramClient, type TelegramClientOptions } from './client.js';
 export { Router } from './router.js';
 export { Poller } from './poller.js';
 export { ConfirmationStore, requestConfirmation } from './confirmation.js';
-export { isAllowed } from './auth.js';
+export { isAllowed, findUser } from './auth.js';
 export { escapeMd2, formatInTz, timeSince, resolveTimezone } from './format.js';
 export type {
   TelegramUpdate,

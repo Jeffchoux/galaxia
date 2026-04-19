@@ -13,6 +13,7 @@ const COMMANDS: Array<[string, string]> = [
   ['/missions',                       'Lister les missions actives'],
   ['/audit [N]',                      'Dernières N décisions de routage (défaut 10)'],
   ['/logs [N]',                       'N dernières lignes du daemon (défaut 20)'],
+  ['/whoami',                         'Identité / rôle / scope de l\'utilisateur courant'],
   ['/help',                           'Afficher cette aide'],
   ['<texte libre>',                   'Conversation — envoyé au LLM avec dataClass=personal'],
 ];
