@@ -73,6 +73,32 @@ export {
   validateRules,
 } from './routing/index.js';
 
+// Global Watcher (Phase 15 bis — veille tech partagée entre projets)
+export type {
+  WatchSource,
+  WatchFinding,
+  RawEntry,
+  WatcherHandle,
+  IngestInput,
+} from './watcher/index.js';
+export {
+  WATCHER_DEFAULT_INTERVAL_HOURS,
+  WATCHER_MIN_INTERVAL_HOURS,
+  watcherFeedPath,
+  appendFinding as appendWatcherFinding,
+  loadFindings as loadWatcherFindings,
+  loadFindingsForProject as loadWatcherFindingsForProject,
+  fetchHackerNews,
+  fetchArxiv,
+  fetchUrlContent,
+  analyzeRawEntry,
+  rawEntryToFinding,
+  analyzeUserSubmission,
+  runScanOnce as runWatcherScanOnce,
+  runWatcherLoop,
+  ingestSubmission as ingestWatcherSubmission,
+} from './watcher/index.js';
+
 // Worldseed AGI adapter (Phase 11)
 export type {
   WorldseedCapability,

@@ -29,6 +29,7 @@ import { makePlanHandler } from './handlers/plan.js';
 import { handleObjective } from './handlers/objective.js';
 import { handleGm } from './handlers/gm.js';
 import { handleWorldseed } from './handlers/worldseed.js';
+import { handleWatch } from './handlers/watch.js';
 import type { DiscoveryStore } from './discovery.js';
 
 export class Router {
@@ -53,6 +54,7 @@ export class Router {
     this.handlers.set('/objective', handleObjective);
     this.handlers.set('/gm',        handleGm);
     this.handlers.set('/worldseed', handleWorldseed);
+    this.handlers.set('/watch',    handleWatch);
     if (discovery) {
       this.handlers.set('/discover', makeDiscoverHandler(discovery));
     }

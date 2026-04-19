@@ -78,6 +78,11 @@ export interface GalaxiaConfig {
     enabled?: boolean;
     port?: number;
   };
+  // Global watcher — tech watch every N hours, shared feed across projects.
+  watcher?: {
+    enabled?: boolean;
+    intervalHours?: number;     // default 4, min 1
+  };
   llm: {
     light: LLMProviderConfig;
     medium: LLMProviderConfig;

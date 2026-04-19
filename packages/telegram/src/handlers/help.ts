@@ -13,6 +13,7 @@ const COMMANDS: Array<[string, string]> = [
   ['/objective <project> "<text>"',   'Ajouter un objectif au GM d\'un projet'],
   ['/gm <project> [pause|resume]',    'Voir / piloter le GM d\'un projet'],
   ['/worldseed <question>',           'Consulter l\'AGI Worldseed (owner, fallback LLM si indisponible)'],
+  ['/watch <url ou texte>',           'Envoyer une info au Watcher pour analyse (owner)'],
   ['/mission add "<desc>"',           'Ajouter une mission'],
   ['/missions',                       'Lister les missions actives'],
   ['/audit [N]',                      'Dernières N décisions de routage (défaut 10)'],

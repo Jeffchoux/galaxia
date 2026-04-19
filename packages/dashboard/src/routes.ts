@@ -17,6 +17,7 @@ import {
   routingAuditPath,
   missionsFilePath,
   loadGMState,
+  loadWatcherFindings,
   callLLM,
 } from '@galaxia/core';
 
@@ -438,4 +439,26 @@ export function handleGetChatHistory(req: IncomingMessage, res: ServerResponse, 
   const n = Math.min(500, Math.max(1, Number(url.searchParams.get('n') ?? '100')));
   const messages = loadChatHistory(ctx.config.dataDir, ctx.user!.name, n);
   writeJSON(res, 200, { messages });
+}
+
+// ── GET /api/watch?n=50&project=<name> ─────────────────────────────────────
+// Returns latest watcher findings. Scope enforced via relevantProjects:
+// a collaborator only sees findings that target projects they can access
+// (plus findings with empty relevantProjects — shared signal).
+
+export function handleGetWatcherFeed(req: IncomingMessage, res: ServerResponse, ctx: RouteContext): void {
+  if (!requireAuth(res, ctx.user)) return;
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const n = Math.min(500, Math.max(1, Number(url.searchParams.get('n') ?? '50')));
+  const projectFilter = url.searchParams.get('project');
+  const all = loadWatcherFindings(ctx.config.dataDir, Math.max(n * 4, 200));
+  const filtered = all.filter((f) => {
+    if (projectFilter) return f.relevantProjects.includes(projectFilter);
+    // Scope: if the user is owner with '*', show all. Otherwise keep findings
+    // whose relevantProjects are EMPTY (general tech) or intersect the scope.
+    if (isOwner(ctx.user!)) return true;
+    if (!f.relevantProjects || f.relevantProjects.length === 0) return true;
+    return f.relevantProjects.some((p) => userCanAccess(ctx.user!, p));
+  });
+  writeJSON(res, 200, { findings: filtered.slice(-n) });
 }

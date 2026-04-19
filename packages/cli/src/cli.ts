@@ -953,6 +953,21 @@ async function runDaemon(): Promise<void> {
     }
   }
 
+  // Global Watcher — tech watch toutes les N heures (HN + Arxiv),
+  // analyse LLM, feed partagé consultable par tous les GMs + /watch
+  // Telegram pour les soumissions user.
+  let watcherHandle: { stop(): void } | null = null;
+  if (config.watcher?.enabled) {
+    try {
+      const { runWatcherLoop } = await import('@galaxia/core');
+      const hours = config.watcher.intervalHours ?? 4;
+      watcherHandle = runWatcherLoop(config, hours, (msg) => daemonLog(`[watcher] ${msg}`));
+      daemonLog(`[watcher] loop started — interval=${hours}h`);
+    } catch (err) {
+      daemonLog(`[watcher] failed to start: ${(err as Error).message}`);
+    }
+  }
+
   // Phase 10 — per-project General Manager loops. One loop per project
   // that has `gm.enabled: true` in galaxia.yml. Loops run independently
   // of the main cycle so a slow LLM call on one GM doesn't block the
@@ -982,6 +997,9 @@ async function runDaemon(): Promise<void> {
     }
     for (const h of gmHandles) {
       try { h.stop(); } catch { /* noop */ }
+    }
+    if (watcherHandle) {
+      try { watcherHandle.stop(); } catch { /* noop */ }
     }
     const deadline = Date.now() + 30_000;
     while (isRunning && Date.now() < deadline) {
