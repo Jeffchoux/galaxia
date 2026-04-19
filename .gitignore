@@ -8,10 +8,10 @@ dist/
 coverage/
 .DS_Store
 .superpowers/
-# Phase 8+ — nested git histories of project pieces (each project under
-# /opt/galaxia/projects/<name>/ can have its own .git). Don't embed them
-# as submodules or gitlinks — just keep them untracked in Galaxia's repo.
-projects/*/.git/
-projects/*/node_modules/
-projects/*/.next/
-projects/*/dist/
+# Galaxia ne tracke PAS le contenu de /opt/galaxia/projects/ : chaque
+# pièce est un repo GitHub séparé appartenant au owner de l'instance.
+# Galaxia-le-framework ne doit jamais contenir les projets de Jeff
+# (ou de quiconque l'installe). Seul projects/README.md reste tracké
+# pour documenter la convention.
+projects/*
+!projects/README.md
