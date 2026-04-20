@@ -43,6 +43,10 @@ export interface RoutingContext {
   // utile pour le dashboard chat (l'utilisateur EST Jeff, il veut Max
   // pour lui-même). False/undefined = guard appliqué normalement.
   bypassInteractiveGuard?: boolean;
+  // Complexity hint (MVP D.1) — surcharge la classification heuristique
+  // par taskType. Utilisé par le cooldown-aware cascade pour déterminer
+  // le tier minimum acceptable. Voir routing/complexity.ts.
+  complexity?: 'trivial' | 'simple' | 'medium' | 'hard' | 'creative';
 }
 
 export interface TimeWindow {

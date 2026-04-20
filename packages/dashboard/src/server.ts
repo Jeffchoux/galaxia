@@ -19,8 +19,8 @@
 // scrypt (Phase 7). Session store is in-memory — reset on daemon restart.
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { readFileSync, existsSync, watch, statSync, readdirSync } from 'node:fs';
+import { join, extname, basename, dirname } from 'node:path';
 import { loadState, type GalaxiaConfig, type GalaxiaState } from '@galaxia/core';
 import {
   createSession, destroySession, lookupSession,
@@ -119,6 +119,57 @@ export function startDashboard(options: StartDashboardOptions | number = {}, leg
   const config = opts.config;
   const sseClients: Set<ServerResponse> = new Set();
 
+  // ── Brain-events SSE — live feed of GM dispatches + Jarvis signals ──
+  // Clients (dashboard brain viz) subscribe to /api/brain-events. The
+  // daemon tails every gm-journal.jsonl for new lines and broadcasts.
+  // Jarvis POSTs to /api/brain-events/emit (127.0.0.1 only) to flash
+  // the brain when recording starts and when an answer is ready.
+  const brainEventClients: Set<ServerResponse> = new Set();
+  const broadcastBrainEvent = (event: Record<string, unknown>): void => {
+    if (brainEventClients.size === 0) return;
+    const data = `data: ${JSON.stringify(event)}\n\n`;
+    for (const r of brainEventClients) {
+      try { r.write(data); } catch { brainEventClients.delete(r); }
+    }
+  };
+  const memoryRoot = dataDir ? join(dataDir, 'memory', 'projects') : null;
+  const journalOffsets: Record<string, number> = {};
+  const tailJournal = (file: string, project: string): void => {
+    try {
+      const st = statSync(file);
+      const prev = journalOffsets[file] ?? st.size;
+      if (st.size < prev) { journalOffsets[file] = st.size; return; }  // truncated
+      if (st.size === prev) return;
+      const fd = readFileSync(file);
+      const chunk = fd.toString('utf-8', prev, st.size);
+      journalOffsets[file] = st.size;
+      for (const line of chunk.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const j = JSON.parse(trimmed) as Record<string, unknown>;
+          broadcastBrainEvent({ source: 'gm', project, ...j });
+        } catch { /* skip malformed line */ }
+      }
+    } catch { /* file missing; ignore */ }
+  };
+  if (memoryRoot && existsSync(memoryRoot)) {
+    try {
+      for (const entry of readdirSync(memoryRoot)) {
+        const file = join(memoryRoot, entry, 'gm-journal.jsonl');
+        if (!existsSync(file)) continue;
+        journalOffsets[file] = statSync(file).size;  // start from EOF
+        try {
+          watch(file, { persistent: false }, () => tailJournal(file, entry));
+        } catch (err) {
+          console.error(`[brain-events] watch failed on ${file}:`, (err as Error).message);
+        }
+      }
+    } catch (err) {
+      console.error('[brain-events] init error:', (err as Error).message);
+    }
+  }
+
   startSessionSweeper();
 
   // SSE push for legacy 3D dashboard (every 5 s).
@@ -206,6 +257,40 @@ export function startDashboard(options: StartDashboardOptions | number = {}, leg
       }
       return;
     }
+    // ── Brain-events SSE stream (observable cerveau) ──
+    if (urlPath === '/api/brain-events' && req.method === 'GET' && ctx) {
+      if (!user) { writeJSON(res, 401, { error: 'unauthorized' }); return; }
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      });
+      res.write(`data: ${JSON.stringify({ source: 'hello', ts: new Date().toISOString() })}\n\n`);
+      brainEventClients.add(res);
+      req.on('close', () => { brainEventClients.delete(res); });
+      return;
+    }
+
+    // ── Brain-events emit (local-only, used by Jarvis) ──
+    // Accepts JSON bodies like {event:'jarvis:listening'} or
+    // {event:'jarvis:speaking', text:'…'}. 127.0.0.1 check only —
+    // Jarvis runs on the same box, nginx sets X-Real-IP.
+    if (urlPath === '/api/brain-events/emit' && req.method === 'POST') {
+      const fwd = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim();
+      const remoteIp = fwd ?? req.socket.remoteAddress ?? '';
+      const isLocal = remoteIp === '127.0.0.1' || remoteIp === '::1' || remoteIp === '::ffff:127.0.0.1';
+      if (!isLocal) { writeJSON(res, 403, { error: 'local-only' }); return; }
+      try {
+        const raw = await readBody(req);
+        const body = JSON.parse(raw) as Record<string, unknown>;
+        broadcastBrainEvent({ source: 'jarvis', ts: new Date().toISOString(), ...body });
+        writeJSON(res, 200, { ok: true });
+      } catch (err) {
+        writeJSON(res, 400, { error: (err as Error).message });
+      }
+      return;
+    }
+
     if (urlPath === '/events' && req.method === 'GET') {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -261,6 +346,10 @@ export function startDashboard(options: StartDashboardOptions | number = {}, leg
       try { res.end(); } catch { /* ignore */ }
     }
     sseClients.clear();
+    for (const res of brainEventClients) {
+      try { res.end(); } catch { /* ignore */ }
+    }
+    brainEventClients.clear();
   });
 
   const shutdown = () => { server.close(() => process.exit(0)); };
