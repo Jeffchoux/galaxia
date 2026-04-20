@@ -16,6 +16,13 @@ import type { RoutingContext, RoutingDecision, RoutingAuditEntry } from './routi
 import { decide } from './routing/engine.js';
 import { logRouting } from './routing/audit.js';
 import { claudeMaxHeartbeat } from './interactive-guard.js';
+import {
+  isCooledDown,
+  markCooldown,
+  markSuccess,
+  tierKey as budgetTierKey,
+  classifyErrorForCooldown,
+} from './llm-budget/store.js';
 
 type ClaudeTransport = 'cli' | 'http';
 
@@ -87,43 +94,17 @@ interface AnthropicResponse {
 // claude-opus-4-20250514, claude-haiku-4-5-20251001. The CLI also accepts
 // short aliases: 'sonnet', 'opus', 'haiku'.
 
-// Anthropic HTTP API — portable, works on any host with an API key, billed
-// per token. Used as the fallback when the local `claude` CLI is absent,
-// unauthenticated, or when the caller explicitly picks transport:'http'.
-async function callClaudeHTTP(prompt: string, config: LLMProviderConfig): Promise<string> {
-  const apiKey = config.apiKey || process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
-
-  const model = config.model || 'claude-sonnet-4-5-20250929';
-
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-
-  if (res.status !== 200) {
-    let errBody = '';
-    try {
-      const j = (await res.json()) as AnthropicResponse;
-      errBody = j.error?.message ?? JSON.stringify(j);
-    } catch {
-      errBody = await res.text().catch(() => '');
-    }
-    throw new Error(`Anthropic API error: ${res.status} ${res.statusText} — ${errBody}`);
-  }
-
-  const data = (await res.json()) as AnthropicResponse;
-  if (data.error) throw new Error(`Anthropic: ${data.error.message}`);
-  return data.content?.[0]?.text ?? '';
+// Anthropic HTTP API — DÉSACTIVÉ PAR POLITIQUE JEFF 2026-04-20.
+// Galaxia consomme Claude uniquement via la CLI locale (abonnement Max),
+// jamais l'API payante au token. Cette fonction throw immédiatement pour
+// empêcher toute régression (fallback auto, nouvelle feature, etc).
+// Pour ré-activer : commenter le throw (mais discuter avec Jeff avant).
+async function callClaudeHTTP(_prompt: string, _config: LLMProviderConfig): Promise<string> {
+  throw new Error(
+    'Claude HTTP API désactivée par policy Jeff 2026-04-20 : abonnement Max uniquement, jamais d\'API burn. ' +
+    'Si Claude CLI échoue (credit/quota/rate), le router cascade vers Groq (light) — pas vers HTTP. ' +
+    'Pour ré-activer l\'API : packages/core/src/llm-router.ts callClaudeHTTP.',
+  );
 }
 
 // Local `claude` CLI (Claude Code). Draws from the Claude Max subscription
@@ -190,21 +171,10 @@ async function callClaude(
   prompt: string,
   config: LLMProviderConfig,
 ): Promise<{ text: string; transport: ClaudeTransport }> {
-  const preferred: ClaudeTransport = config.transport ?? 'cli';
-
-  if (preferred === 'cli') {
-    try {
-      const text = await callClaudeCLI(prompt, config);
-      return { text, transport: 'cli' };
-    } catch (cliErr) {
-      console.error(
-        `[llm-router] Claude CLI failed, falling back to HTTP: ${(cliErr as Error).message}`,
-      );
-    }
-  }
-
-  const text = await callClaudeHTTP(prompt, config);
-  return { text, transport: 'http' };
+  // Policy Jeff 2026-04-20 : CLI uniquement, jamais HTTP API.
+  // Si CLI échoue → on throw et le router externe cascade vers light (Groq).
+  const text = await callClaudeCLI(prompt, config);
+  return { text, transport: 'cli' };
 }
 
 // Thin adapter so the legacy tier-only router (callLLMByTier) and the
@@ -363,7 +333,12 @@ export async function callLLM(
   // on remap vers le tier 'light' (Groq). Skippé quand
   // ctx.bypassInteractiveGuard=true (dashboard chat veut Max même si
   // l'utilisateur est actif — parce que L'UTILISATEUR EST JEFF).
-  if (!ctx.bypassInteractiveGuard && decision.tier === 'heavy' && decision.provider === 'claude') {
+  //
+  // Règle Jeff 2026-04-19 : le guard ne demote PAS les tâches de code
+  // (code-gen / code-review). Quand un agent code un projet, c'est
+  // Claude Opus 4.7 obligatoirement, peu importe si Jeff est en session.
+  const isCodeTask = ctx.taskType === 'code-gen' || ctx.taskType === 'code-review';
+  if (!ctx.bypassInteractiveGuard && !isCodeTask && decision.tier === 'heavy' && decision.provider === 'claude') {
     const hb = claudeMaxHeartbeat();
     if (hb.busy) {
       const lightCfg = config.llm.light;
@@ -372,6 +347,30 @@ export async function callLLM(
       decision.model = lightCfg.model;
       decision.matchedRule = `${decision.matchedRule} + interactive-guard`;
       decision.reason = `${decision.reason} | overridden by claude-max-interactive-guard (heartbeat age=${Math.round((hb.ageMs ?? 0) / 1000)}s)`;
+    }
+  }
+
+  // MVP D.3 — cooldown-aware demote. Si le tier sélectionné est en
+  // cooldown (quota cramé récent), on descend la pyramide avant même
+  // de tenter. Évite les 429/credit-low en boucle qui polluent les logs.
+  const primaryKey = budgetTierKey(decision.tier, decision.provider, decision.model);
+  if (isCooledDown(config.dataDir, primaryKey) && !decision.forbidFallback) {
+    // Descendre : heavy -> medium -> light -> local
+    const descendChain: LLMTier[] = decision.tier === 'heavy' ? ['medium', 'light', 'local']
+      : decision.tier === 'medium' ? ['light', 'local']
+      : decision.tier === 'light' ? ['local']
+      : [];
+    for (const alt of descendChain) {
+      const altCfg = config.llm[alt];
+      const altKey = budgetTierKey(alt, altCfg.provider, altCfg.model);
+      if (!isCooledDown(config.dataDir, altKey)) {
+        decision.matchedRule = `${decision.matchedRule} + cooled-down-demote`;
+        decision.reason = `${decision.reason} | ${decision.tier} in cooldown, demoted to ${alt}`;
+        decision.tier = alt;
+        decision.provider = altCfg.provider;
+        decision.model = altCfg.model;
+        break;
+      }
     }
   }
 
@@ -394,15 +393,28 @@ export async function callLLM(
     logRouting(entry, config);
   };
 
+  // Helper : détecter et enregistrer un cooldown si l'erreur est un
+  // rate-limit / credit-low. Skippe sinon (erreurs techniques, etc).
+  const recordCooldown = (tier: LLMTier, provider: LLMProvider, model: string, err: Error): void => {
+    const cd = classifyErrorForCooldown(err.message);
+    if (cd) {
+      const key = budgetTierKey(tier, provider, model);
+      markCooldown(config.dataDir, key, cd.durationMs, err.message);
+      console.error(`[llm-router] cooldown ${tier} (${provider}/${model}) for ${Math.round(cd.durationMs / 1000)}s : ${cd.reason}`);
+    }
+  };
+
   // Primary attempt
   try {
     const { text, transport } = await invokeProvider(decision.provider, decision.model, decision.tier, prompt, config);
     decision.transport = transport;
+    markSuccess(config.dataDir, budgetTierKey(decision.tier, decision.provider, decision.model));
     writeAudit(true, undefined);
     return { text, decision };
   } catch (primaryErr) {
     const primaryMsg = (primaryErr as Error).message;
     console.error(`[llm-router] primary ${decision.provider}(${decision.model}) failed: ${primaryMsg}`);
+    recordCooldown(decision.tier, decision.provider, decision.model, primaryErr as Error);
 
     if (decision.forbidFallback) {
       writeAudit(false, primaryMsg);
@@ -413,24 +425,31 @@ export async function callLLM(
       );
     }
 
-    // Fallback chain — respects the primary tier and skips tiers the decision
-    // already tried. Never falls into 'local' if primary was remote (it's
-    // fine to go remote → local, but we want predictable behavior).
+    // Fallback chain — skip tiers en cooldown + skip celui qui vient
+    // de cramer (déjà primaire).
     for (const fbTier of FALLBACK_CHAIN) {
       if (fbTier === decision.tier) continue;
       const fbCfg = config.llm[fbTier];
       if (!PROVIDER_FN[fbCfg.provider]) continue;
+      const fbKey = budgetTierKey(fbTier, fbCfg.provider, fbCfg.model);
+      if (isCooledDown(config.dataDir, fbKey)) {
+        console.error(`[llm-router] fallback ${fbTier} skipped (en cooldown)`);
+        decision.fallbackTried.push(`${fbCfg.provider}(${fbCfg.model}):cooldown`);
+        continue;
+      }
       try {
         console.error(`[llm-router] fallback → ${fbTier} (${fbCfg.provider}/${fbCfg.model})`);
         const { text, transport } = await invokeProvider(fbCfg.provider, fbCfg.model, fbTier, prompt, config);
         decision.transport = transport;
         decision.fallbackTried.push(`${fbCfg.provider}(${fbCfg.model})`);
+        markSuccess(config.dataDir, fbKey);
         writeAudit(true, `primary failed: ${primaryMsg}. recovered on ${fbTier}.`);
         return { text, decision };
       } catch (fbErr) {
         const fbMsg = (fbErr as Error).message;
         decision.fallbackTried.push(`${fbCfg.provider}(${fbCfg.model})`);
         console.error(`[llm-router] fallback ${fbTier} also failed: ${fbMsg}`);
+        recordCooldown(fbTier, fbCfg.provider, fbCfg.model, fbErr as Error);
       }
     }
 

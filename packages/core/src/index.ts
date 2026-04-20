@@ -73,6 +73,23 @@ export {
   validateRules,
 } from './routing/index.js';
 
+// LLM budget tracker — persistent cooldowns par tier (MVP D.2)
+export type { TierState, LLMBudgetState } from './llm-budget/index.js';
+export {
+  budgetPath as llmBudgetPath,
+  loadBudget as loadLLMBudget,
+  saveBudget as saveLLMBudget,
+  markCooldown as markLLMCooldown,
+  markSuccess as markLLMSuccess,
+  isCooledDown as isLLMCooledDown,
+  tierKey as llmTierKey,
+  classifyErrorForCooldown,
+} from './llm-budget/index.js';
+
+// Complexity classifier (MVP D.1)
+export type { Complexity } from './routing/complexity.js';
+export { classifyComplexity, COMPLEXITY_TIER_PREFERENCE } from './routing/complexity.js';
+
 // Interactive-session guard — détecte si Jeff bosse en CLI Claude Code
 // et si oui, évite de cramer sa fenêtre Max depuis Galaxia.
 export {
